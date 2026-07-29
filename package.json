@@ -4,8 +4,9 @@
   "type": "module",
  "scripts": {
   "dev": "vite",
-  "build": "npx vite build",
-  "preview": "vite preview"
+  "build": "vite build",
+  "preview": "vite preview",
+  "postinstall": "chmod +x ./node_modules/.bin/*"
   },
   "dependencies": {
     "lucide-react": "^1.27.0",
