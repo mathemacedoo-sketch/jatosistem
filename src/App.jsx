@@ -1,8 +1,29 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useEffect, useRef, useState } from "react";
+import { supabase } from "./lib/supabase";
+
 import {
-  LayoutDashboard, FilePlus2, ClipboardList, Users, Sparkles, Boxes,
-  Wallet, Landmark, Trash2, CheckCircle2, AlertTriangle, Plus, X,
-  Droplets, TrendingUp, TrendingDown, Search, Building2, UserCog, Pencil, Printer, RotateCcw
+  LayoutDashboard,
+  FilePlus2,
+  ClipboardList,
+  Users,
+  Sparkles,
+  Boxes,
+  Wallet,
+  Landmark,
+  Trash2,
+  CheckCircle2,
+  AlertTriangle,
+  Plus,
+  X,
+  Droplets,
+  TrendingUp,
+  TrendingDown,
+  Search,
+  Building2,
+  UserCog,
+  Pencil,
+  Printer,
+  RotateCcw
 } from "lucide-react";
 
 // ---------- helpers ----------
