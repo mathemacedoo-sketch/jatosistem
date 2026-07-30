@@ -249,7 +249,7 @@ const SEED = {
     { id: usuarioAdmId, nome: "Administrador", usuario: "admin", senha: DEFAULT_ADMIN_PASSWORD, empresaId: empresaAdmId, perfil: "master" },
   ],
   clientes: [
-    { id: uid(), nome: "Cliente Avulso", telefone: "", veiculo: "", placa: "", empresaId: empresaAdmId },
+    { id: uid(), nome: "Consumidor", telefone: "", veiculo: "", placa: "", empresaId: empresaAdmId },
   ],
   funcionarios: [],
   servicos: [
@@ -326,7 +326,12 @@ export default function App() {
         const res = await window.storage.get(STORAGE_KEY, false);
         if (res && res.value) {
           const parsed = JSON.parse(res.value);
-          setDb({ ...SEED, ...parsed });
+          setDb({
+            ...SEED,
+            ...parsed,
+            clientes: (parsed.clientes || SEED.clientes).map((cliente) => cliente.nome === "Cliente Avulso" ? { ...cliente, nome: "Consumidor" } : cliente),
+            ordens: (parsed.ordens || []).map((ordem) => ordem.clienteNome === "Cliente Avulso" ? { ...ordem, clienteNome: "Consumidor" } : ordem),
+          });
         }
       } catch (e) {
         // no data yet, keep SEED
@@ -493,7 +498,7 @@ export default function App() {
       {/* Main */}
       <main className="flex-1 min-w-0 overflow-y-auto">
         <div className="max-w-7xl mx-auto p-6 md:p-8">
-          {tab === "dashboard" && podeAcessar("dashboard") && <Dashboard db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} stats={stats} setTab={setTab} />}
+          {tab === "dashboard" && podeAcessar("dashboard") && <Dashboard db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} stats={stats} />}
           {tab === "nova-os" && <NovaOS db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresa={empresaAtiva} ordemEmEdicao={ordemEmEdicao} onFinalizarEdicao={() => setOrdemEmEdicao(null)} />}
           {tab === "ordens" && <Ordens db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresa={empresaAtiva} onEditarNaOS={(ordem) => { setOrdemEmEdicao(ordem); setTab("nova-os"); }} />}
           {tab === "clientes" && <Clientes db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresaSegmento={empresaAtiva?.segmento || "lava-jato"} />}
@@ -831,7 +836,7 @@ function FuncionariosScreen({ db, update, empresaId }) {
 }
 
 // ---------- Dashboard ----------
-function Dashboard({ db, stats, setTab }) {
+function Dashboard({ db, stats }) {
   const ultimasOrdens = db.ordens.filter((ordem) => !ordem.lancamentoManual).sort((a, b) => (a.data < b.data ? 1 : -1)).slice(0, 6);
   return (
     <div className="space-y-6">
@@ -851,9 +856,6 @@ function Dashboard({ db, stats, setTab }) {
         <Card className="p-5">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-slate-800">Últimas ordens de serviço</h2>
-            <button onClick={() => setTab("nova-os")} className="text-orange-600 text-sm font-semibold flex items-center gap-1 hover:text-violet-700">
-              <Plus size={15} /> Nova OS
-            </button>
           </div>
           {ultimasOrdens.length === 0 ? (
             <EmptyState text="Nenhuma ordem de serviço registrada ainda." />
@@ -1145,7 +1147,7 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao }) {
       numero,
       data: todayISO(),
       clienteId,
-      clienteNome: cliente?.nome || "Cliente Avulso",
+      clienteNome: cliente?.nome || "Consumidor",
       itens,
       subtotal: subtotalItens,
       desconto: descontoAplicado,
@@ -1479,7 +1481,7 @@ function Ordens({ db, update, empresa, onEditarNaOS }) {
         return {
           ...o,
           clienteId: editForm.clienteId,
-          clienteNome: cliente?.nome || o.clienteNome || "Cliente Avulso",
+          clienteNome: cliente?.nome || o.clienteNome || "Consumidor",
           itens: itensValidos.map((item) => ({ ...item, subtotal: Number(item.precoUnit || 0) * Number(item.qtd || 1) })),
           total: totalEditado,
           statusOS: concluir ? "concluido" : (o.statusOS || "concluido"),
