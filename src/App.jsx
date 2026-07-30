@@ -499,7 +499,7 @@ export default function App() {
       <main className="flex-1 min-w-0 overflow-y-auto">
         <div className="max-w-7xl mx-auto p-6 md:p-8">
           {tab === "dashboard" && podeAcessar("dashboard") && <Dashboard db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} stats={stats} />}
-          {tab === "nova-os" && <NovaOS db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresa={empresaAtiva} ordemEmEdicao={ordemEmEdicao} onFinalizarEdicao={() => setOrdemEmEdicao(null)} />}
+          {tab === "nova-os" && <NovaOS db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresa={empresaAtiva} ordemEmEdicao={ordemEmEdicao} onFinalizarEdicao={() => setOrdemEmEdicao(null)} podeEditarValor={isMaster || isGerente} />}
           {tab === "ordens" && <Ordens db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresa={empresaAtiva} onEditarNaOS={(ordem) => { setOrdemEmEdicao(ordem); setTab("nova-os"); }} />}
           {tab === "clientes" && <Clientes db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresaSegmento={empresaAtiva?.segmento || "lava-jato"} />}
           {tab === "funcionarios" && podeAcessar("funcionarios") && <FuncionariosScreen db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresaId={auth.empresaId || auth.usuarioLogado?.empresaId || ""} />}
@@ -1047,13 +1047,14 @@ function ReciboFinanceiroModal({ tipo, conta, empresa = {}, onClose }) {
 }
 
 // ---------- Nova OS ----------
-function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao }) {
+function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, podeEditarValor }) {
   const [clienteId, setClienteId] = useState(db.clientes[0]?.id || "");
   const [buscaCliente, setBuscaCliente] = useState("");
   const [seletorClienteAberto, setSeletorClienteAberto] = useState(false);
   const [itens, setItens] = useState([]);
   const [tipoSel, setTipoSel] = useState("servico");
   const [itemSel, setItemSel] = useState("");
+  const [valorItem, setValorItem] = useState("");
   const [qtd, setQtd] = useState(1);
   const [formaPagamento, setFormaPagamento] = useState("Dinheiro");
   const [statusPagamento, setStatusPagamento] = useState("pago");
@@ -1095,13 +1096,15 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao }) {
   const addItem = () => {
     const src = catalogo.find((c) => c.id === itemSel);
     if (!src || qtd <= 0) return;
-    const preco = tipoSel === "servico" ? src.preco : (src.precoVenda || src.precoCusto);
+    const precoCadastrado = tipoSel === "servico" ? src.preco : (src.precoVenda || src.precoCusto);
+    const preco = valorItem === "" ? Number(precoCadastrado || 0) : Math.max(0, Number(valorItem));
     const quantidade = Number(qtd);
     setItens((prev) => [
       ...prev,
       { uidLine: uid(), tipo: tipoSel, itemId: src.id, nome: src.nome, descricao: src.nome, qtd: quantidade, precoUnit: preco, subtotal: preco * quantidade },
     ]);
     setItemSel("");
+    setValorItem("");
     setQtd(1);
   };
 
@@ -1246,26 +1249,34 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao }) {
 
         <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 space-y-3">
           <div className="text-sm font-semibold text-slate-700">Adicionar item</div>
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
             <Field label="Tipo">
-              <select className={inputCls} value={tipoSel} onChange={(e) => { setTipoSel(e.target.value); setItemSel(""); }}>
+              <select className={inputCls} value={tipoSel} onChange={(e) => { setTipoSel(e.target.value); setItemSel(""); setValorItem(""); }}>
                 <option value="servico">Serviço</option>
                 <option value="produto">Produto</option>
               </select>
             </Field>
             <div className="sm:col-span-2">
               <Field label={tipoSel === "servico" ? "Serviço" : "Produto"}>
-                <select className={inputCls} value={itemSel} onChange={(e) => setItemSel(e.target.value)}>
+                <select className={inputCls} value={itemSel} onChange={(e) => {
+                  const id = e.target.value;
+                  const item = catalogo.find((registro) => registro.id === id);
+                  setItemSel(id);
+                  setValorItem(id ? String(tipoSel === "servico" ? item?.preco || 0 : item?.precoVenda || item?.precoCusto || 0) : "");
+                }}>
                   <option value="">Selecione...</option>
                   {catalogo.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.nome} — {brl(tipoSel === "servico" ? c.preco : (c.precoVenda || c.precoCusto))}
+                      {c.nome}
                       {tipoSel === "produto" ? ` (${c.quantidade} ${c.unidade} em estoque)` : ""}
                     </option>
                   ))}
                 </select>
               </Field>
             </div>
+            <Field label="Valor">
+              <input type="number" min="0" step="0.01" disabled={!podeEditarValor} className={inputCls + " disabled:cursor-not-allowed disabled:bg-slate-100"} value={valorItem} onChange={(e) => setValorItem(e.target.value)} />
+            </Field>
             <Field label="Qtd">
               <input type="number" min="1" className={inputCls} value={qtd} onChange={(e) => setQtd(e.target.value)} />
             </Field>
@@ -1286,7 +1297,7 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao }) {
                         <input className={inputCls} value={editForm.descricao} onChange={(e) => setEditForm((prev) => ({ ...prev, descricao: e.target.value }))} />
                       </Field>
                       <Field label="Valor">
-                        <input type="number" min="0" className={inputCls} value={editForm.valor} onChange={(e) => setEditForm((prev) => ({ ...prev, valor: e.target.value }))} />
+                        <input type="number" min="0" disabled={!podeEditarValor} className={inputCls + " disabled:cursor-not-allowed disabled:bg-slate-100"} value={editForm.valor} onChange={(e) => setEditForm((prev) => ({ ...prev, valor: e.target.value }))} />
                       </Field>
                       <Field label="Qtd">
                         <input type="number" min="1" className={inputCls} value={editForm.qtd} onChange={(e) => setEditForm((prev) => ({ ...prev, qtd: e.target.value }))} />
