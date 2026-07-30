@@ -118,7 +118,8 @@ const imprimirReciboOS = (ordem, empresa = {}, cliente = {}) => {
               <div><strong>Telefone:</strong> ${escapeHtml(cliente.telefone || "-")}</div>
               <div><strong>E-mail:</strong> ${escapeHtml(cliente.email || "-")}</div>
               ${enderecoCliente ? `<div style="grid-column:1/-1"><strong>Endereço:</strong> ${escapeHtml(enderecoCliente)}</div>` : ""}
-              ${cliente.veiculo || cliente.placa ? `<div style="grid-column:1/-1"><strong>Veículo:</strong> ${escapeHtml(cliente.veiculo || "-")} ${cliente.placa ? `· Placa ${escapeHtml(cliente.placa)}` : ""}</div>` : ""}
+              ${ordem.veiculo || cliente.veiculo || ordem.placa || cliente.placa ? `<div style="grid-column:1/-1"><strong>Veículo:</strong> ${escapeHtml([ordem.marca || cliente.marca, ordem.veiculo || cliente.veiculo].filter(Boolean).join(" ") || "-")} ${ordem.cor || cliente.cor ? `· ${escapeHtml(ordem.cor || cliente.cor)}` : ""} ${ordem.ano || cliente.ano ? `· ${escapeHtml(ordem.ano || cliente.ano)}` : ""} ${ordem.placa || cliente.placa ? `· Placa ${escapeHtml(ordem.placa || cliente.placa)}` : ""}</div>` : ""}
+              ${ordem.motorista || cliente.motorista ? `<div style="grid-column:1/-1"><strong>Motorista/Responsável:</strong> ${escapeHtml(ordem.motorista || cliente.motorista)}</div>` : ""}
             </div>
           </section>
           <section class="section">
@@ -958,7 +959,8 @@ function ReciboOSModal({ ordem, empresa = {}, cliente = {}, onClose }) {
               <div><strong>Telefone:</strong> {cliente.telefone || "-"}</div>
               <div><strong>E-mail:</strong> {cliente.email || "-"}</div>
               {enderecoCliente && <div className="sm:col-span-2"><strong>Endereço:</strong> {enderecoCliente}</div>}
-              {(cliente.veiculo || cliente.placa) && <div className="sm:col-span-2"><strong>Veículo:</strong> {cliente.veiculo || "-"} {cliente.placa ? `· Placa ${cliente.placa}` : ""}</div>}
+              {(ordem.veiculo || cliente.veiculo || ordem.placa || cliente.placa) && <div className="sm:col-span-2"><strong>Veículo:</strong> {[ordem.marca || cliente.marca, ordem.veiculo || cliente.veiculo].filter(Boolean).join(" ") || "-"} {ordem.cor || cliente.cor ? `· ${ordem.cor || cliente.cor}` : ""} {ordem.ano || cliente.ano ? `· ${ordem.ano || cliente.ano}` : ""} {ordem.placa || cliente.placa ? `· Placa ${ordem.placa || cliente.placa}` : ""}</div>}
+              {(ordem.motorista || cliente.motorista) && <div className="sm:col-span-2"><strong>Motorista/Responsável:</strong> {ordem.motorista || cliente.motorista}</div>}
             </div>
           </section>
 
@@ -1085,7 +1087,11 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, podeEdi
   const clientesComCodigo = db.clientes.map((cliente, index) => ({ ...cliente, codigoExibicao: cliente.codigo || String(index + 1).padStart(4, "0") }));
   const termoCliente = buscaCliente.trim().toLowerCase().replace(/^#/, "");
   const clientesFiltrados = clientesComCodigo.filter((cliente) =>
-    !termoCliente || cliente.nome.toLowerCase().includes(termoCliente) || cliente.codigoExibicao.toLowerCase().includes(termoCliente)
+    !termoCliente
+    || cliente.nome.toLowerCase().includes(termoCliente)
+    || cliente.codigoExibicao.toLowerCase().includes(termoCliente)
+    || (cliente.placa || "").toLowerCase().includes(termoCliente)
+    || (cliente.motorista || "").toLowerCase().includes(termoCliente)
   );
   const subtotalItens = itens.reduce((s, i) => s + i.subtotal, 0);
   const descontoAplicado = Math.min(Math.max(Number(desconto) || 0, 0), subtotalItens);
@@ -1151,6 +1157,12 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, podeEdi
       data: todayISO(),
       clienteId,
       clienteNome: cliente?.nome || "Consumidor",
+      veiculo: cliente?.veiculo || "",
+      marca: cliente?.marca || "",
+      cor: cliente?.cor || "",
+      ano: cliente?.ano || "",
+      placa: cliente?.placa || "",
+      motorista: cliente?.motorista || "",
       itens,
       subtotal: subtotalItens,
       desconto: descontoAplicado,
@@ -1216,13 +1228,13 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, podeEdi
               <div className="mb-4 flex items-center justify-between">
                 <div>
                   <h2 className="font-semibold text-slate-900">Selecionar cliente</h2>
-                  <p className="text-xs text-slate-500">Pesquise pelo nome ou código.</p>
+                  <p className="text-xs text-slate-500">Pesquise pelo nome, código, placa ou motorista.</p>
                 </div>
                 <button type="button" onClick={() => setSeletorClienteAberto(false)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"><X size={18} /></button>
               </div>
               <div className="relative mb-3">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input autoFocus className={inputCls + " pl-9"} placeholder="Nome ou código do cliente" value={buscaCliente} onChange={(e) => setBuscaCliente(e.target.value)} />
+                <input autoFocus className={inputCls + " pl-9"} placeholder="Nome, código, placa ou motorista" value={buscaCliente} onChange={(e) => setBuscaCliente(e.target.value)} />
               </div>
               <div className="max-h-72 overflow-y-auto rounded-xl border border-slate-200 p-1">
                 {clientesFiltrados.length === 0 ? (
@@ -1239,7 +1251,7 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, podeEdi
                     className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-orange-50 hover:text-orange-700"
                   >
                     <span><strong>#{cliente.codigoExibicao}</strong> · {cliente.nome}</span>
-                    <span className="text-xs text-slate-400">{cliente.cpfCnpj || cliente.placa || ""}</span>
+                    <span className="text-right text-xs text-slate-400">{cliente.placa || cliente.cpfCnpj || ""}{cliente.motorista ? <><br />{cliente.motorista}</> : null}</span>
                   </button>
                 ))}
               </div>
@@ -1773,7 +1785,8 @@ function Ordens({ db, update, empresa, onEditarNaOS }) {
 function Clientes({ db, update, empresaSegmento = "lava-jato" }) {
   const clienteFormInicial = {
     tipoPessoa: "fisica", nome: "", cpfCnpj: "", dataNascimento: "", email: "", telefone: "",
-    cep: "", endereco: "", numero: "", bairro: "", cidade: "", estado: "", veiculo: "", placa: "",
+    cep: "", endereco: "", numero: "", bairro: "", cidade: "", estado: "",
+    marca: "", veiculo: "", cor: "", ano: "", placa: "", motorista: "",
   };
   const [form, setForm] = useState(clienteFormInicial);
   const [busca, setBusca] = useState("");
@@ -1789,7 +1802,10 @@ function Clientes({ db, update, empresaSegmento = "lava-jato" }) {
 
   const lista = db.clientes.filter((c) => {
     const termo = busca.toLowerCase();
-    return c.nome.toLowerCase().includes(termo) || (c.cpfCnpj || "").toLowerCase().includes(termo);
+    return c.nome.toLowerCase().includes(termo)
+      || (c.cpfCnpj || "").toLowerCase().includes(termo)
+      || (c.placa || "").toLowerCase().includes(termo)
+      || (c.motorista || "").toLowerCase().includes(termo);
   });
 
   return (
@@ -1819,10 +1835,20 @@ function Clientes({ db, update, empresaSegmento = "lava-jato" }) {
           <Field label="Cidade"><input className={inputCls} value={form.cidade} onChange={(e) => setForm({ ...form, cidade: e.target.value })} /></Field>
           <Field label="UF"><input maxLength={2} className={inputCls} value={form.estado} onChange={(e) => setForm({ ...form, estado: e.target.value.toUpperCase() })} /></Field>
           {mostraCamposVeiculo && (
-            <>
-              <Field label="Veículo"><input className={inputCls} value={form.veiculo} onChange={(e) => setForm({ ...form, veiculo: e.target.value })} /></Field>
-              <Field label="Placa"><input className={inputCls} value={form.placa} onChange={(e) => setForm({ ...form, placa: e.target.value })} /></Field>
-            </>
+            <div className="col-span-full mt-2 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="mb-3">
+                <h2 className="text-sm font-semibold text-slate-800">Dados do veículo</h2>
+                <p className="text-xs text-slate-500">Identificação do carro e da pessoa responsável por levá-lo ao lava-jato.</p>
+              </div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                <Field label="Marca"><input className={inputCls} placeholder="Ex.: Toyota" value={form.marca} onChange={(e) => setForm({ ...form, marca: e.target.value })} /></Field>
+                <Field label="Modelo"><input className={inputCls} placeholder="Ex.: Corolla" value={form.veiculo} onChange={(e) => setForm({ ...form, veiculo: e.target.value })} /></Field>
+                <Field label="Cor"><input className={inputCls} placeholder="Ex.: Prata" value={form.cor} onChange={(e) => setForm({ ...form, cor: e.target.value })} /></Field>
+                <Field label="Ano"><input inputMode="numeric" maxLength={4} className={inputCls} placeholder="Ex.: 2024" value={form.ano} onChange={(e) => setForm({ ...form, ano: e.target.value.replace(/\D/g, "").slice(0, 4) })} /></Field>
+                <Field label="Placa"><input maxLength={8} className={inputCls} placeholder="Ex.: ABC1D23" value={form.placa} onChange={(e) => setForm({ ...form, placa: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 7) })} /></Field>
+                <Field label="Motorista/Responsável"><input className={inputCls} placeholder="Quem costuma levar o veículo?" value={form.motorista} onChange={(e) => setForm({ ...form, motorista: e.target.value })} /></Field>
+              </div>
+            </div>
           )}
         </div>
         <button onClick={add} className="mt-3 flex items-center gap-1.5 text-sm font-semibold text-violet-700"><Plus size={16} /> Adicionar cliente</button>
@@ -1830,14 +1856,14 @@ function Clientes({ db, update, empresaSegmento = "lava-jato" }) {
 
       <div className="relative max-w-xs">
         <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-        <input className={inputCls + " pl-8"} placeholder="Buscar por nome ou CPF/CNPJ..." value={busca} onChange={(e) => setBusca(e.target.value)} />
+        <input className={inputCls + " pl-8"} placeholder="Buscar por nome, documento, placa..." value={busca} onChange={(e) => setBusca(e.target.value)} />
       </div>
 
       <Card className="p-0 overflow-hidden">
         {lista.length === 0 ? <EmptyState text="Nenhum cliente encontrado." /> : (
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
-              <tr><th className="text-left px-4 py-3">Nome</th><th className="text-left px-4 py-3">Telefone</th>{mostraCamposVeiculo && <><th className="text-left px-4 py-3">Veículo</th><th className="text-left px-4 py-3">Placa</th></>}<th className="px-4 py-3"></th></tr>
+              <tr><th className="text-left px-4 py-3">Nome</th><th className="text-left px-4 py-3">Telefone</th>{mostraCamposVeiculo && <><th className="text-left px-4 py-3">Veículo</th><th className="text-left px-4 py-3">Motorista</th></>}<th className="px-4 py-3"></th></tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {lista.map((c) => (
@@ -1847,7 +1873,15 @@ function Clientes({ db, update, empresaSegmento = "lava-jato" }) {
                     {c.cpfCnpj && <div className="mt-0.5 text-xs font-normal text-slate-400">{c.tipoPessoa === "juridica" ? "CNPJ" : "CPF"}: {c.cpfCnpj}</div>}
                   </td>
                   <td className="px-4 py-3 text-slate-500">{c.telefone || "-"}</td>
-                  {mostraCamposVeiculo && <><td className="px-4 py-3 text-slate-500">{c.veiculo || "-"}</td><td className="px-4 py-3 text-slate-500">{c.placa || "-"}</td></>}
+                  {mostraCamposVeiculo && (
+                    <>
+                      <td className="px-4 py-3 text-slate-500">
+                        <div>{[c.marca, c.veiculo].filter(Boolean).join(" ") || "-"}</div>
+                        {(c.cor || c.ano || c.placa) && <div className="mt-0.5 text-xs text-slate-400">{[c.cor, c.ano, c.placa].filter(Boolean).join(" · ")}</div>}
+                      </td>
+                      <td className="px-4 py-3 text-slate-500">{c.motorista || "-"}</td>
+                    </>
+                  )}
                   <td className="px-4 py-3 text-right"><button onClick={() => remove(c.id)} className="text-slate-400 hover:text-red-500"><Trash2 size={16} /></button></td>
                 </tr>
               ))}
@@ -2222,17 +2256,6 @@ function ContasReceber({ db, update, empresa }) {
         <p className="text-slate-500 text-sm mt-1">Gerado automaticamente a partir das ordens de serviço pendentes ou parciais.</p>
       </header>
 
-      <div className="space-y-2">
-        <div className="text-sm font-semibold text-slate-600">
-          Resumo financeiro: {filtros.cliente || "todos os clientes"}
-        </div>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <StatCard icon={TrendingUp} label="Valor total das contas" value={brl(totalGeral)} tone="slate" />
-          <StatCard icon={CheckCircle2} label="Já pago" value={brl(totalPago)} tone="cyan" />
-          <StatCard icon={Wallet} label="Falta pagar" value={brl(totalPendente)} tone="amber" />
-        </div>
-      </div>
-
       <Card className="p-5">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3 lg:grid-cols-6 lg:items-end">
           <Field label="Conta ou OS">
@@ -2339,6 +2362,17 @@ function ContasReceber({ db, update, empresa }) {
           </table>
         )}
       </Card>
+
+      <div className="flex justify-end">
+        <div className="flex w-full flex-wrap items-center justify-between gap-x-6 gap-y-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm sm:w-auto sm:justify-end">
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Saldo do filtro</span>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <span className="text-slate-500">Total <strong className="ml-1 text-slate-700">{brl(totalGeral)}</strong></span>
+            <span className="text-slate-500">Recebido <strong className="ml-1 text-emerald-600">{brl(totalPago)}</strong></span>
+            <span className="text-slate-500">A receber <strong className="ml-1 text-amber-600">{brl(totalPendente)}</strong></span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -2429,12 +2463,6 @@ function ContasPagar({ db, update, empresa }) {
         <h1 className="headline text-2xl font-bold text-slate-900">Contas a pagar</h1>
         <p className="text-slate-500 text-sm mt-1">Fornecedores, contas fixas e outras despesas.</p>
       </header>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard icon={Landmark} label="Total pendente" value={brl(totalPendente)} tone="red" />
-        <StatCard icon={CheckCircle2} label="Total pago" value={brl(totalPago)} tone="cyan" />
-        <StatCard icon={TrendingDown} label="Total geral" value={brl(totalGeral)} tone="slate" />
-      </div>
 
       <Card className="p-5">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_160px_180px_180px_auto] md:items-end">
@@ -2543,6 +2571,17 @@ function ContasPagar({ db, update, empresa }) {
           </table>
         )}
       </Card>
+
+      <div className="flex justify-end">
+        <div className="flex w-full flex-wrap items-center justify-between gap-x-6 gap-y-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm sm:w-auto sm:justify-end">
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Saldo do filtro</span>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <span className="text-slate-500">Total <strong className="ml-1 text-slate-700">{brl(totalGeral)}</strong></span>
+            <span className="text-slate-500">Pago <strong className="ml-1 text-emerald-600">{brl(totalPago)}</strong></span>
+            <span className="text-slate-500">A pagar <strong className="ml-1 text-red-600">{brl(totalPendente)}</strong></span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
