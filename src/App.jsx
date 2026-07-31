@@ -740,6 +740,16 @@ function UsuariosScreen({ db, update, isMaster, empresaId }) {
   const [empresaSelecionada, setEmpresaSelecionada] = useState(empresaId || (db.empresas?.[0]?.id || ""));
   const [salvando, setSalvando] = useState(false);
   const [erroSalvar, setErroSalvar] = useState("");
+  const empresasDisponiveis = db.empresas || [];
+  const empresaSelecionadaValida = empresasDisponiveis.some((empresa) => String(empresa.id) === String(empresaSelecionada))
+    ? empresaSelecionada
+    : (empresasDisponiveis[0]?.id || empresaId || "");
+
+  useEffect(() => {
+    if (empresaSelecionadaValida && String(empresaSelecionada) !== String(empresaSelecionadaValida)) {
+      setEmpresaSelecionada(empresaSelecionadaValida);
+    }
+  }, [empresaSelecionada, empresaSelecionadaValida]);
 
   const add = async () => {
     if (!form.nome.trim() || !form.usuario.trim() || !form.senha.trim()) {
@@ -747,7 +757,7 @@ function UsuariosScreen({ db, update, isMaster, empresaId }) {
       return;
     }
     if (!isMaster && form.perfil === "master") return;
-    const targetEmpresaId = isMaster ? (empresaSelecionada || form.empresaId) : empresaId;
+    const targetEmpresaId = isMaster ? (empresaSelecionadaValida || form.empresaId) : empresaId;
     setSalvando(true);
     setErroSalvar("");
     try {
@@ -787,7 +797,9 @@ function UsuariosScreen({ db, update, isMaster, empresaId }) {
 
   const lista = (db.usuarios || []).filter((usuario) => {
     if (usuario.perfil === "master" && usuario.usuario === "admin") return false;
-    return isMaster ? usuario.empresaId === (empresaSelecionada || empresaId) : usuario.empresaId === empresaId;
+    if (!isMaster) return String(usuario.empresaId) === String(empresaId);
+    if (empresasDisponiveis.length <= 1) return true;
+    return String(usuario.empresaId) === String(empresaSelecionadaValida);
   });
 
   return (
@@ -800,8 +812,8 @@ function UsuariosScreen({ db, update, isMaster, empresaId }) {
       <Card className="p-5 space-y-4">
         {isMaster && (
           <Field label="Empresa">
-            <select className={inputCls} value={empresaSelecionada} onChange={(e) => setEmpresaSelecionada(e.target.value)}>
-              {(db.empresas || []).map((empresa) => <option key={empresa.id} value={empresa.id}>{empresa.nome}</option>)}
+            <select className={inputCls} value={empresaSelecionadaValida} onChange={(e) => setEmpresaSelecionada(e.target.value)}>
+              {empresasDisponiveis.map((empresa) => <option key={empresa.id} value={empresa.id}>{empresa.nome}</option>)}
             </select>
           </Field>
         )}
