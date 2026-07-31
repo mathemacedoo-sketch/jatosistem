@@ -565,59 +565,15 @@ function Ordens({ db, update }) {
 }
 
 // ---------- Clientes ----------
-  function Clientes({ db, update }) {
-  const [form, setForm] = useState({
-    nome: "",
-    telefone: "",
-    veiculo: "",
-    placa: "",
-  });
-
+function Clientes({ db, update }) {
+  const [form, setForm] = useState({ nome: "", telefone: "", veiculo: "", placa: "" });
   const [busca, setBusca] = useState("");
 
-  const add = async () => {
+  const add = () => {
     if (!form.nome.trim()) return;
-
-    const { data, error } = await supabase
-      .from("clientes")
-      .insert([
-        {
-          nome: form.nome,
-          telefone: form.telefone,
-          veiculo: form.veiculo,
-          placa: form.placa,
-        },
-      ])
-      .select()
-      .single();
-
-    if (error) {
-      console.error("Erro ao salvar cliente:", error);
-      alert(`Erro ao salvar cliente: ${error.message}`);
-      return;
-    }
-
-    update("clientes", (prev) => [...prev, data]);
-
-    setForm({
-      nome: "",
-      telefone: "",
-      veiculo: "",
-      placa: "",
-    });
-
-    alert("Cliente salvo com sucesso!");
+    update("clientes", (prev) => [...prev, { id: uid(), ...form }]);
+    setForm({ nome: "", telefone: "", veiculo: "", placa: "" });
   };
-
-  const remove = (id) =>
-    update("clientes", (prev) => prev.filter((c) => c.id !== id));
-
-  const lista = db.clientes.filter((c) =>
-    c.nome.toLowerCase().includes(busca.toLowerCase())
-  );
-
-  // restante do seu código
-}
   const remove = (id) => update("clientes", (prev) => prev.filter((c) => c.id !== id));
 
   const lista = db.clientes.filter((c) => c.nome.toLowerCase().includes(busca.toLowerCase()));

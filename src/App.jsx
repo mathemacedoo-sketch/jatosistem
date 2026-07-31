@@ -23,8 +23,7 @@ import {
   UserCog,
   Pencil,
   Printer,
-  RotateCcw,
-  Save
+  RotateCcw
 } from "lucide-react";
 
 // ---------- helpers ----------
@@ -346,7 +345,7 @@ export default function App() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await window.storage.get(STORAGE_KEY, false);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
         if (res && res.value) {
           const parsed = JSON.parse(res.value);
           setDb({
@@ -365,17 +364,22 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!loaded) return;
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(async () => {
-      try {
-        await window.storage.set(STORAGE_KEY, JSON.stringify(db), false);
-      } catch (e) {
-        console.error("Erro ao salvar dados", e);
-      }
-    }, 400);
-    return () => clearTimeout(saveTimer.current);
-  }, [db, loaded]);
+  if (!loaded) return;
+
+  if (saveTimer.current) {
+    clearTimeout(saveTimer.current);
+  }
+
+  saveTimer.current = setTimeout(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+    } catch (error) {
+      console.error("Erro ao salvar dados:", error);
+    }
+  }, 400);
+
+  return () => clearTimeout(saveTimer.current);
+}, [db, loaded]);
 
   const update = (key, updater) =>
     setDb((prev) => {
@@ -1813,11 +1817,81 @@ function Clientes({ db, update, empresaSegmento = "lava-jato" }) {
   const [form, setForm] = useState(clienteFormInicial);
   const [busca, setBusca] = useState("");
 
-  const add = () => {
-    if (!form.nome.trim()) return;
-    const proximoCodigo = String(Math.max(0, ...db.clientes.map((cliente) => Number(cliente.codigo) || 0)) + 1).padStart(4, "0");
-    update("clientes", (prev) => [...prev, { id: uid(), codigo: proximoCodigo, ...form }]);
-    setForm(clienteFormInicial);
+  const add = async () => {
+  if (!form.nome.trim()) {
+    alert("Informe o nome do cliente.");
+    return;
+  }
+
+  const proximoCodigo = String(
+    Math.max(
+      0,
+      ...db.clientes.map((cliente) => Number(cliente.codigo) || 0)
+    ) + 1
+  ).padStart(4, "0");
+
+  const novoCliente = {
+    codigo: proximoCodigo,
+    tipo_pessoa: form.tipoPessoa,
+    nome: form.nome,
+    cpf_cnpj: form.cpfCnpj || null,
+    data_nascimento: form.dataNascimento || null,
+    email: form.email || null,
+    telefone: form.telefone || null,
+    cep: form.cep || null,
+    endereco: form.endereco || null,
+    numero: form.numero || null,
+    bairro: form.bairro || null,
+    cidade: form.cidade || null,
+    estado: form.estado || null,
+    marca: form.marca || null,
+    veiculo: form.veiculo || null,
+    cor: form.cor || null,
+    ano: form.ano || null,
+    placa: form.placa || null,
+    motorista: form.motorista || null,
+  };
+
+  const { data, error } = await supabase
+    .from("clientes")
+    .insert([novoCliente])
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Erro do Supabase:", error);
+    alert(`Erro ao salvar: ${error.message}`);
+    return;
+  }
+
+  update("clientes", (prev) => [
+    ...prev,
+    {
+      id: data.id,
+      codigo: data.codigo,
+      tipoPessoa: data.tipo_pessoa,
+      nome: data.nome,
+      cpfCnpj: data.cpf_cnpj || "",
+      dataNascimento: data.data_nascimento || "",
+      email: data.email || "",
+      telefone: data.telefone || "",
+      cep: data.cep || "",
+      endereco: data.endereco || "",
+      numero: data.numero || "",
+      bairro: data.bairro || "",
+      cidade: data.cidade || "",
+      estado: data.estado || "",
+      marca: data.marca || "",
+      veiculo: data.veiculo || "",
+      cor: data.cor || "",
+      ano: data.ano || "",
+      placa: data.placa || "",
+      motorista: data.motorista || "",
+    },
+  ]);
+
+  setForm(clienteFormInicial);
+  alert("Cliente salvo com sucesso!");
   };
   const mostraCamposVeiculo = (empresaSegmento || "lava-jato").toLowerCase() === "lava-jato";
   const remove = (id) => update("clientes", (prev) => prev.filter((c) => c.id !== id));
@@ -1873,15 +1947,7 @@ function Clientes({ db, update, empresaSegmento = "lava-jato" }) {
             </div>
           )}
         </div>
-        <button
-          type="button"
-          onClick={add}
-          disabled={!form.nome.trim()}
-          className="mt-4 inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-        >
-          <Save size={16} />
-          Salvar cliente
-        </button>
+        <button onClick={add} className="mt-3 flex items-center gap-1.5 text-sm font-semibold text-violet-700"><Plus size={16} /> Adicionar cliente</button>
       </Card>
 
       <div className="relative max-w-xs">
