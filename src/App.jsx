@@ -340,11 +340,26 @@ export default function App() {
   const [tab, setTab] = useState("login");
   const [ordemEmEdicao, setOrdemEmEdicao] = useState(null);
   const [auth, setAuth] = useState({ usuario: "", senha: "", empresaId: "", usuarioLogado: null });
-  const saveTimer = useRef(null);
   const lastSynced = useRef(SEED);
+  const dbRef = useRef(SEED);
   const syncQueue = useRef(Promise.resolve());
 
+  const persistSnapshot = (snapshot) => {
+    const task = syncQueue.current
+      .catch(() => undefined)
+      .then(async () => {
+        await syncDatabase(lastSynced.current, snapshot);
+        lastSynced.current = snapshot;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+      });
+    syncQueue.current = task.catch((error) => {
+      console.error("Erro ao sincronizar dados com o Supabase:", error);
+    });
+    return task;
+  };
+
   useEffect(() => {
+    let active = true;
     (async () => {
       let initialData = SEED;
       let remoteInitialized = true;
@@ -381,52 +396,41 @@ export default function App() {
           ordens: [],
           contasPagar: [],
         };
+        if (!active) return;
+        dbRef.current = initialData;
         setDb(initialData);
         setLoaded(true);
+        persistSnapshot(initialData).catch((error) => {
+          window.alert(`Não foi possível inicializar o Supabase: ${error.message}`);
+        });
       }
     })();
+    return () => {
+      active = false;
+    };
   }, []);
 
-  useEffect(() => {
-  if (!loaded) return;
-
-  if (saveTimer.current) {
-    clearTimeout(saveTimer.current);
-  }
-
-  const snapshot = JSON.parse(JSON.stringify(db));
-  saveTimer.current = setTimeout(() => {
-    syncQueue.current = syncQueue.current
-      .then(async () => {
-        await syncDatabase(lastSynced.current, snapshot);
-        lastSynced.current = snapshot;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
-      })
-      .catch((error) => {
-        console.error("Erro ao sincronizar dados com o Supabase:", error);
-        window.alert(`Não foi possível sincronizar com o Supabase: ${error.message}`);
-      });
-  }, 0);
-
-  return () => clearTimeout(saveTimer.current);
-}, [db, loaded]);
-
-  const update = (key, updater) =>
-    setDb((prev) => {
-      if (key === "empresas" || key === "usuarios") {
-        return { ...prev, [key]: updater(prev[key] || []) };
-      }
-
+  const update = (key, updater) => {
+    const previous = dbRef.current;
+    let next;
+    if (key === "empresas" || key === "usuarios") {
+      next = { ...previous, [key]: updater(previous[key] || []) };
+    } else {
       const companyId = auth.empresaId || auth.usuarioLogado?.empresaId || "";
-      const items = prev[key] || [];
+      const items = previous[key] || [];
       const currentItems = items.filter((item) => !item.empresaId || item.empresaId === companyId);
       const otherItems = items.filter((item) => item.empresaId && item.empresaId !== companyId);
       const updatedItems = updater(currentItems).map((item) =>
         item && typeof item === "object" && !item.empresaId ? { ...item, empresaId: companyId } : item
       );
+      next = { ...previous, [key]: [...otherItems, ...updatedItems] };
+    }
 
-      return { ...prev, [key]: [...otherItems, ...updatedItems] };
-    });
+    const snapshot = JSON.parse(JSON.stringify(next));
+    dbRef.current = snapshot;
+    setDb(snapshot);
+    return persistSnapshot(snapshot);
+  };
 
   const empresas = db.empresas || [];
   const usuarios = db.usuarios || [];
@@ -734,25 +738,37 @@ function UsuariosScreen({ db, update, isMaster, empresaId }) {
   const [form, setForm] = useState({ nome: "", usuario: "", senha: "", perfil: "usuario", empresaId: empresaId || "" });
   const [editandoId, setEditandoId] = useState(null);
   const [empresaSelecionada, setEmpresaSelecionada] = useState(empresaId || (db.empresas?.[0]?.id || ""));
+  const [salvando, setSalvando] = useState(false);
+  const [erroSalvar, setErroSalvar] = useState("");
 
-  const add = () => {
-    if (!form.nome.trim() || !form.usuario.trim() || !form.senha.trim()) return;
-    if (!isMaster && form.perfil === "master") return;
-    const targetEmpresaId = isMaster ? (empresaSelecionada || form.empresaId) : empresaId;
-    if (editandoId) {
-      update("usuarios", (prev) => prev.map((usuario) => usuario.id === editandoId ? { ...usuario, nome: form.nome, usuario: form.usuario, senha: form.senha, perfil: form.perfil, empresaId: targetEmpresaId } : usuario));
-      setEditandoId(null);
-      setForm({ nome: "", usuario: "", senha: "", perfil: "usuario", empresaId: targetEmpresaId });
+  const add = async () => {
+    if (!form.nome.trim() || !form.usuario.trim() || !form.senha.trim()) {
+      setErroSalvar("Preencha nome, usuário e senha.");
       return;
     }
-    update("usuarios", (prev) => [...prev, createUsuario({
-      nome: form.nome,
-      usuario: form.usuario,
-      senha: form.senha,
-      empresaId: targetEmpresaId,
-      perfil: form.perfil,
-    })]);
-    setForm({ nome: "", usuario: "", senha: "", perfil: "usuario", empresaId: targetEmpresaId });
+    if (!isMaster && form.perfil === "master") return;
+    const targetEmpresaId = isMaster ? (empresaSelecionada || form.empresaId) : empresaId;
+    setSalvando(true);
+    setErroSalvar("");
+    try {
+      if (editandoId) {
+        await update("usuarios", (prev) => prev.map((usuario) => usuario.id === editandoId ? { ...usuario, nome: form.nome, usuario: form.usuario, senha: form.senha, perfil: form.perfil, empresaId: targetEmpresaId } : usuario));
+        setEditandoId(null);
+      } else {
+        await update("usuarios", (prev) => [...prev, createUsuario({
+          nome: form.nome,
+          usuario: form.usuario,
+          senha: form.senha,
+          empresaId: targetEmpresaId,
+          perfil: form.perfil,
+        })]);
+      }
+      setForm({ nome: "", usuario: "", senha: "", perfil: "usuario", empresaId: targetEmpresaId });
+    } catch (error) {
+      setErroSalvar(error.message);
+    } finally {
+      setSalvando(false);
+    }
   };
 
   const editarUsuario = (usuario) => {
@@ -805,8 +821,9 @@ function UsuariosScreen({ db, update, isMaster, empresaId }) {
             {isMaster && <option value="master">Master</option>}
           </select>
         </Field>
+        {erroSalvar && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{erroSalvar}</div>}
         <div className="flex gap-2">
-          <button onClick={add} className="rounded-xl bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white">{editandoId ? "Salvar alterações" : "Salvar usuário"}</button>
+          <button disabled={salvando} onClick={add} className="rounded-xl bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-wait disabled:opacity-60">{salvando ? "Salvando..." : editandoId ? "Salvar alterações" : "Salvar usuário"}</button>
           {editandoId && <button onClick={() => { setEditandoId(null); setForm({ nome: "", usuario: "", senha: "", perfil: "usuario", empresaId }); }} className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600">Cancelar</button>}
         </div>
       </Card>
