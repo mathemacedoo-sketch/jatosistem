@@ -5,6 +5,7 @@ create table if not exists public.sistema_registros (
   registro_id text not null,
   empresa_id text,
   dados jsonb not null default '{}'::jsonb,
+  dt_exc timestamptz,
   criado_em timestamptz not null default now(),
   atualizado_em timestamptz not null default now(),
   primary key (modulo, registro_id)
@@ -12,6 +13,9 @@ create table if not exists public.sistema_registros (
 
 create index if not exists sistema_registros_empresa_idx
   on public.sistema_registros (empresa_id);
+
+alter table public.sistema_registros
+  add column if not exists dt_exc timestamptz;
 
 alter table public.clientes
   add column if not exists empresa_id text,
@@ -32,7 +36,16 @@ alter table public.clientes
   add column if not exists cor text,
   add column if not exists ano text,
   add column if not exists placa text,
-  add column if not exists motorista text;
+  add column if not exists motorista text,
+  add column if not exists dt_exc timestamptz;
+
+create index if not exists sistema_registros_ativos_idx
+  on public.sistema_registros (modulo, empresa_id)
+  where dt_exc is null;
+
+create index if not exists clientes_ativos_idx
+  on public.clientes (empresa_id)
+  where dt_exc is null;
 
 -- A aplicação atual usa login próprio e acessa o banco com a chave anon.
 -- Estas políticas liberam o CRUD para esse modelo. Para produção, migre o login

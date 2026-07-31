@@ -67,8 +67,8 @@ const throwIfError = (result, operation) => {
 
 export async function loadDatabase(seed) {
   const [clientesResult, recordsResult] = await Promise.all([
-    supabase.from("clientes").select("*").order("id", { ascending: true }),
-    supabase.from("sistema_registros").select("modulo, registro_id, empresa_id, dados"),
+    supabase.from("clientes").select("*").is("dt_exc", null).order("id", { ascending: true }),
+    supabase.from("sistema_registros").select("modulo, registro_id, empresa_id, dados").is("dt_exc", null),
   ]);
 
   const clientes = throwIfError(clientesResult, "Erro ao carregar clientes").map(clienteFromRow);
@@ -126,7 +126,7 @@ export async function syncDatabase(previous, current) {
   }
   if (clientesRemoved.length) {
     throwIfError(
-      await supabase.from("clientes").delete().in("id", clientesRemoved),
+      await supabase.from("clientes").update({ dt_exc: new Date().toISOString() }).in("id", clientesRemoved),
       "Erro ao excluir clientes"
     );
   }
@@ -143,6 +143,7 @@ export async function syncDatabase(previous, current) {
         registro_id: String(item.id),
         empresa_id: item.empresaId || null,
         dados: item,
+        dt_exc: null,
       }));
       throwIfError(
         await supabase.from("sistema_registros").upsert(rows, { onConflict: "modulo,registro_id" }),
@@ -151,7 +152,11 @@ export async function syncDatabase(previous, current) {
     }
     if (removed.length) {
       throwIfError(
-        await supabase.from("sistema_registros").delete().eq("modulo", collection).in("registro_id", removed),
+        await supabase
+          .from("sistema_registros")
+          .update({ dt_exc: new Date().toISOString() })
+          .eq("modulo", collection)
+          .in("registro_id", removed),
         `Erro ao excluir de ${collection}`
       );
     }

@@ -397,7 +397,7 @@ export default function App() {
         console.error("Erro ao sincronizar dados com o Supabase:", error);
         window.alert(`Não foi possível sincronizar com o Supabase: ${error.message}`);
       });
-  }, 400);
+  }, 0);
 
   return () => clearTimeout(saveTimer.current);
 }, [db, loaded]);
@@ -751,6 +751,15 @@ function UsuariosScreen({ db, update, isMaster, empresaId }) {
     setForm({ nome: usuario.nome, usuario: usuario.usuario, senha: usuario.senha, perfil: usuario.perfil || "usuario", empresaId: usuario.empresaId });
   };
 
+  const removerUsuario = (usuario) => {
+    if (!window.confirm(`Deseja excluir o usuário ${usuario.nome}?`)) return;
+    update("usuarios", (prev) => prev.filter((item) => item.id !== usuario.id));
+    if (editandoId === usuario.id) {
+      setEditandoId(null);
+      setForm({ nome: "", usuario: "", senha: "", perfil: "usuario", empresaId });
+    }
+  };
+
   const lista = (db.usuarios || []).filter((usuario) => {
     if (usuario.perfil === "master" && usuario.usuario === "admin") return false;
     return isMaster ? usuario.empresaId === (empresaSelecionada || empresaId) : usuario.empresaId === empresaId;
@@ -796,17 +805,18 @@ function UsuariosScreen({ db, update, isMaster, empresaId }) {
       <Card className="p-0 overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
-            <tr><th className="text-left px-4 py-3">Nome</th><th className="text-left px-4 py-3">Usuário</th><th className="text-left px-4 py-3">Perfil</th></tr>
+            <tr><th className="text-left px-4 py-3">Nome</th><th className="text-left px-4 py-3">Usuário</th><th className="text-left px-4 py-3">Perfil</th><th className="px-4 py-3 text-right">Ações</th></tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {lista.map((usuario) => (
               <tr key={usuario.id}>
                 <td className="px-4 py-3 font-medium">{usuario.nome}</td>
                 <td className="px-4 py-3 text-slate-500">{usuario.usuario}</td>
-                <td className="px-4 py-3 text-slate-500">
-                  <div className="flex items-center justify-between gap-3">
-                    <span>{usuario.perfil === "master" ? "Master" : usuario.perfil === "gerente" ? "Gerente" : "Usuário"}</span>
+                <td className="px-4 py-3 text-slate-500">{usuario.perfil === "master" ? "Master" : usuario.perfil === "gerente" ? "Gerente" : "Usuário"}</td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center justify-end gap-3">
                     <button onClick={() => editarUsuario(usuario)} className="text-slate-400 hover:text-violet-600" title="Editar usuário"><Pencil size={16} /></button>
+                    <button onClick={() => removerUsuario(usuario)} className="text-slate-400 hover:text-red-500" title="Excluir usuário"><Trash2 size={16} /></button>
                   </div>
                 </td>
               </tr>
