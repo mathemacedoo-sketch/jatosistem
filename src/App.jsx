@@ -1817,6 +1817,47 @@ function Clientes({ db, update, empresaSegmento = "lava-jato" }) {
   const [form, setForm] = useState(clienteFormInicial);
   const [busca, setBusca] = useState("");
 
+  useEffect(() => {
+  async function carregarClientes() {
+    const { data, error } = await supabase
+      .from("clientes")
+      .select("*")
+      .order("id", { ascending: true });
+
+    if (error) {
+      console.error("Erro ao carregar clientes:", error);
+      return;
+    }
+
+    const clientesFormatados = (data || []).map((cliente) => ({
+      id: cliente.id,
+      codigo: cliente.codigo,
+      tipoPessoa: cliente.tipo_pessoa,
+      nome: cliente.nome,
+      cpfCnpj: cliente.cpf_cnpj || "",
+      dataNascimento: cliente.data_nascimento || "",
+      email: cliente.email || "",
+      telefone: cliente.telefone || "",
+      cep: cliente.cep || "",
+      endereco: cliente.endereco || "",
+      numero: cliente.numero || "",
+      bairro: cliente.bairro || "",
+      cidade: cliente.cidade || "",
+      estado: cliente.estado || "",
+      marca: cliente.marca || "",
+      veiculo: cliente.veiculo || "",
+      cor: cliente.cor || "",
+      ano: cliente.ano || "",
+      placa: cliente.placa || "",
+      motorista: cliente.motorista || "",
+    }));
+
+    update("clientes", () => clientesFormatados);
+  }
+
+  carregarClientes();
+}, []);
+
   const add = async () => {
   if (!form.nome.trim()) {
     alert("Informe o nome do cliente.");
