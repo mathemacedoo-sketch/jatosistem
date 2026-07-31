@@ -62,3 +62,11 @@ drop policy if exists "clientes_crud_anon" on public.clientes;
 create policy "clientes_crud_anon"
   on public.clientes for all to anon
   using (true) with check (true);
+
+-- Atualiza a credencial do usuário master padrão já existente.
+update public.sistema_registros
+set dados = jsonb_set(dados, '{senha}', '"admin"'::jsonb, true)
+where modulo = 'usuarios'
+  and dados->>'usuario' = 'admin'
+  and dados->>'perfil' = 'master'
+  and dt_exc is null;

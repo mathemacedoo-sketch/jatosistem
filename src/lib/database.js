@@ -73,6 +73,23 @@ export async function loadDatabase(seed) {
 
   const clientes = throwIfError(clientesResult, "Erro ao carregar clientes").map(clienteFromRow);
   const records = throwIfError(recordsResult, "Erro ao carregar dados do sistema");
+  const masterPadrao = records.find(
+    (row) => row.modulo === "usuarios"
+      && row.dados?.usuario === "admin"
+      && row.dados?.perfil === "master"
+      && row.dados?.senha !== "admin"
+  );
+  if (masterPadrao) {
+    masterPadrao.dados = { ...masterPadrao.dados, senha: "admin" };
+    throwIfError(
+      await supabase
+        .from("sistema_registros")
+        .update({ dados: masterPadrao.dados })
+        .eq("modulo", "usuarios")
+        .eq("registro_id", masterPadrao.registro_id),
+      "Erro ao atualizar senha do usuário master"
+    );
+  }
   const initialized = records.some((row) => row.modulo === "__meta__");
   const loaded = {
     ...seed,

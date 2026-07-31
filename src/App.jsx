@@ -41,7 +41,7 @@ const fmtDate = (d) => {
   return `${day}/${m}/${y}`;
 };
 const monthKey = (d) => (d || "").slice(0, 7);
-const DEFAULT_ADMIN_PASSWORD = "admin123";
+const DEFAULT_ADMIN_PASSWORD = "admin";
 
 const onlyDigits = (value = "") => value.replace(/\D/g, "");
 const formatCpfCnpj = (value = "") => {
