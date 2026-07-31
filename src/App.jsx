@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { supabase } from "./lib/supabase";
+import { createCliente, loadDatabase, syncDatabase } from "./lib/database";
 
 import {
   LayoutDashboard,
@@ -341,23 +341,38 @@ export default function App() {
   const [ordemEmEdicao, setOrdemEmEdicao] = useState(null);
   const [auth, setAuth] = useState({ usuario: "", senha: "", empresaId: "", usuarioLogado: null });
   const saveTimer = useRef(null);
+  const lastSynced = useRef(SEED);
+  const syncQueue = useRef(Promise.resolve());
 
   useEffect(() => {
     (async () => {
+      let initialData = SEED;
+      let remoteInitialized = true;
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
-        if (res && res.value) {
-          const parsed = JSON.parse(res.value);
-          setDb({
-            ...SEED,
-            ...parsed,
-            clientes: (parsed.clientes || SEED.clientes).map((cliente) => cliente.nome === "Cliente Avulso" ? { ...cliente, nome: "Consumidor" } : cliente),
-            ordens: (parsed.ordens || []).map((ordem) => ordem.clienteNome === "Cliente Avulso" ? { ...ordem, clienteNome: "Consumidor" } : ordem),
-          });
-        }
-      } catch (e) {
-        // no data yet, keep SEED
+        const loadedDatabase = await loadDatabase(SEED);
+        initialData = loadedDatabase.database;
+        remoteInitialized = loadedDatabase.initialized;
+      } catch (error) {
+        console.error("Erro ao carregar o Supabase; usando cópia local:", error);
+        const localData = localStorage.getItem(STORAGE_KEY);
+        if (localData) initialData = { ...SEED, ...JSON.parse(localData) };
       } finally {
+        initialData = {
+          ...initialData,
+          clientes: (initialData.clientes || []).map((cliente) => cliente.nome === "Cliente Avulso" ? { ...cliente, nome: "Consumidor" } : cliente),
+          ordens: (initialData.ordens || []).map((ordem) => ordem.clienteNome === "Cliente Avulso" ? { ...ordem, clienteNome: "Consumidor" } : ordem),
+        };
+        lastSynced.current = remoteInitialized ? initialData : {
+          ...initialData,
+          empresas: [],
+          usuarios: [],
+          funcionarios: [],
+          servicos: [],
+          produtos: [],
+          ordens: [],
+          contasPagar: [],
+        };
+        setDb(initialData);
         setLoaded(true);
       }
     })();
@@ -370,12 +385,18 @@ export default function App() {
     clearTimeout(saveTimer.current);
   }
 
+  const snapshot = JSON.parse(JSON.stringify(db));
   saveTimer.current = setTimeout(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
-    } catch (error) {
-      console.error("Erro ao salvar dados:", error);
-    }
+    syncQueue.current = syncQueue.current
+      .then(async () => {
+        await syncDatabase(lastSynced.current, snapshot);
+        lastSynced.current = snapshot;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+      })
+      .catch((error) => {
+        console.error("Erro ao sincronizar dados com o Supabase:", error);
+        window.alert(`Não foi possível sincronizar com o Supabase: ${error.message}`);
+      });
   }, 400);
 
   return () => clearTimeout(saveTimer.current);
@@ -451,6 +472,10 @@ export default function App() {
     { id: "receber", label: "Contas a Receber", icon: Wallet },
     { id: "pagar", label: "Contas a Pagar", icon: Landmark },
   ].filter((item) => podeAcessar(item.id));
+
+  if (!loaded) {
+    return <div className="min-h-screen grid place-items-center bg-slate-50 text-sm font-medium text-slate-500">Carregando dados...</div>;
+  }
 
   if (tab === "login") {
     return <LoginScreen auth={auth} setAuth={setAuth} entrar={entrar} db={db} />;
@@ -1817,122 +1842,20 @@ function Clientes({ db, update, empresaSegmento = "lava-jato" }) {
   const [form, setForm] = useState(clienteFormInicial);
   const [busca, setBusca] = useState("");
 
-  useEffect(() => {
-  async function carregarClientes() {
-    const { data, error } = await supabase
-      .from("clientes")
-      .select("*")
-      .order("id", { ascending: true });
-
-    if (error) {
-      console.error("Erro ao carregar clientes:", error);
+  const add = async () => {
+    if (!form.nome.trim()) {
+      alert("Informe o nome do cliente.");
       return;
     }
-
-    const clientesFormatados = (data || []).map((cliente) => ({
-      id: cliente.id,
-      codigo: cliente.codigo,
-      tipoPessoa: cliente.tipo_pessoa,
-      nome: cliente.nome,
-      cpfCnpj: cliente.cpf_cnpj || "",
-      dataNascimento: cliente.data_nascimento || "",
-      email: cliente.email || "",
-      telefone: cliente.telefone || "",
-      cep: cliente.cep || "",
-      endereco: cliente.endereco || "",
-      numero: cliente.numero || "",
-      bairro: cliente.bairro || "",
-      cidade: cliente.cidade || "",
-      estado: cliente.estado || "",
-      marca: cliente.marca || "",
-      veiculo: cliente.veiculo || "",
-      cor: cliente.cor || "",
-      ano: cliente.ano || "",
-      placa: cliente.placa || "",
-      motorista: cliente.motorista || "",
-    }));
-
-    update("clientes", () => clientesFormatados);
-  }
-
-  carregarClientes();
-}, []);
-
-  const add = async () => {
-  if (!form.nome.trim()) {
-    alert("Informe o nome do cliente.");
-    return;
-  }
-
-  const proximoCodigo = String(
-    Math.max(
-      0,
-      ...db.clientes.map((cliente) => Number(cliente.codigo) || 0)
-    ) + 1
-  ).padStart(4, "0");
-
-  const novoCliente = {
-    codigo: proximoCodigo,
-    tipo_pessoa: form.tipoPessoa,
-    nome: form.nome,
-    cpf_cnpj: form.cpfCnpj || null,
-    data_nascimento: form.dataNascimento || null,
-    email: form.email || null,
-    telefone: form.telefone || null,
-    cep: form.cep || null,
-    endereco: form.endereco || null,
-    numero: form.numero || null,
-    bairro: form.bairro || null,
-    cidade: form.cidade || null,
-    estado: form.estado || null,
-    marca: form.marca || null,
-    veiculo: form.veiculo || null,
-    cor: form.cor || null,
-    ano: form.ano || null,
-    placa: form.placa || null,
-    motorista: form.motorista || null,
-  };
-
-  const { data, error } = await supabase
-    .from("clientes")
-    .insert([novoCliente])
-    .select()
-    .single();
-
-  if (error) {
-    console.error("Erro do Supabase:", error);
-    alert(`Erro ao salvar: ${error.message}`);
-    return;
-  }
-
-  update("clientes", (prev) => [
-    ...prev,
-    {
-      id: data.id,
-      codigo: data.codigo,
-      tipoPessoa: data.tipo_pessoa,
-      nome: data.nome,
-      cpfCnpj: data.cpf_cnpj || "",
-      dataNascimento: data.data_nascimento || "",
-      email: data.email || "",
-      telefone: data.telefone || "",
-      cep: data.cep || "",
-      endereco: data.endereco || "",
-      numero: data.numero || "",
-      bairro: data.bairro || "",
-      cidade: data.cidade || "",
-      estado: data.estado || "",
-      marca: data.marca || "",
-      veiculo: data.veiculo || "",
-      cor: data.cor || "",
-      ano: data.ano || "",
-      placa: data.placa || "",
-      motorista: data.motorista || "",
-    },
-  ]);
-
-  setForm(clienteFormInicial);
-  alert("Cliente salvo com sucesso!");
+    const proximoCodigo = String(Math.max(0, ...db.clientes.map((cliente) => Number(cliente.codigo) || 0)) + 1).padStart(4, "0");
+    try {
+      const cliente = await createCliente({ codigo: proximoCodigo, ...form });
+      update("clientes", (prev) => [...prev, cliente]);
+      setForm(clienteFormInicial);
+    } catch (error) {
+      console.error(error);
+      alert(error.message);
+    }
   };
   const mostraCamposVeiculo = (empresaSegmento || "lava-jato").toLowerCase() === "lava-jato";
   const remove = (id) => update("clientes", (prev) => prev.filter((c) => c.id !== id));
