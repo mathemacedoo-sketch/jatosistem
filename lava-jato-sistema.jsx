@@ -565,10 +565,6 @@ function Ordens({ db, update }) {
 }
 
 // ---------- Clientes ----------
-function Clientes({ db, update }) {
-  const [form, setForm] = useState({ nome: "", telefone: "", veiculo: "", placa: "" });
-  const [busca, setBusca] = useState("");
-
   function Clientes({ db, update }) {
   const [form, setForm] = useState({
     nome: "",
