@@ -74,9 +74,7 @@ export async function loadDatabase(seed) {
   const clientes = throwIfError(clientesResult, "Erro ao carregar clientes").map(clienteFromRow);
   const records = throwIfError(recordsResult, "Erro ao carregar dados do sistema");
   let masterPadrao = records.find(
-    (row) => row.modulo === "usuarios"
-      && row.dados?.usuario === "admin"
-      && row.dados?.perfil === "master"
+    (row) => row.modulo === "usuarios" && row.registro_id === "usuario-admin"
   );
 
   if (!masterPadrao) {

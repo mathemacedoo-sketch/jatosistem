@@ -756,6 +756,14 @@ function UsuariosScreen({ db, update, isMaster, empresaId }) {
       setErroSalvar("Preencha nome, usuário e senha.");
       return;
     }
+    const usuarioDuplicado = (db.usuarios || []).some(
+      (usuario) => usuario.id !== editandoId
+        && usuario.usuario.trim().toLowerCase() === form.usuario.trim().toLowerCase()
+    );
+    if (usuarioDuplicado) {
+      setErroSalvar("Este nome de usuário já está em uso. Escolha outro.");
+      return;
+    }
     if (!isMaster && form.perfil === "master") return;
     const targetEmpresaId = isMaster ? (empresaSelecionadaValida || form.empresaId) : empresaId;
     setSalvando(true);
@@ -796,7 +804,7 @@ function UsuariosScreen({ db, update, isMaster, empresaId }) {
   };
 
   const lista = (db.usuarios || []).filter((usuario) => {
-    if (usuario.perfil === "master" && usuario.usuario === "admin") return false;
+    if (String(usuario.id) === "usuario-admin") return false;
     if (!isMaster) return String(usuario.empresaId) === String(empresaId);
     if (empresasDisponiveis.length <= 1) return true;
     return String(usuario.empresaId) === String(empresaSelecionadaValida);
