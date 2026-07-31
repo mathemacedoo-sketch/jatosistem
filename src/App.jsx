@@ -23,7 +23,8 @@ import {
   UserCog,
   Pencil,
   Printer,
-  RotateCcw
+  RotateCcw,
+  Save
 } from "lucide-react";
 
 // ---------- helpers ----------
@@ -1872,7 +1873,15 @@ function Clientes({ db, update, empresaSegmento = "lava-jato" }) {
             </div>
           )}
         </div>
-        <button onClick={add} className="mt-3 flex items-center gap-1.5 text-sm font-semibold text-violet-700"><Plus size={16} /> Adicionar cliente</button>
+        <button
+          type="button"
+          onClick={add}
+          disabled={!form.nome.trim()}
+          className="mt-4 inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+        >
+          <Save size={16} />
+          Salvar cliente
+        </button>
       </Card>
 
       <div className="relative max-w-xs">
