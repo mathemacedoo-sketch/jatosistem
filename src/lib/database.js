@@ -73,13 +73,57 @@ export async function loadDatabase(seed) {
 
   const clientes = throwIfError(clientesResult, "Erro ao carregar clientes").map(clienteFromRow);
   const records = throwIfError(recordsResult, "Erro ao carregar dados do sistema");
-  const masterPadrao = records.find(
+  let masterPadrao = records.find(
     (row) => row.modulo === "usuarios"
       && row.dados?.usuario === "admin"
       && row.dados?.perfil === "master"
-      && row.dados?.senha !== "admin"
   );
-  if (masterPadrao) {
+
+  if (!masterPadrao) {
+    let empresaPadrao = records.find(
+      (row) => row.modulo === "empresas" && row.dados?.nome === "ADM"
+    ) || records.find((row) => row.modulo === "empresas");
+
+    if (!empresaPadrao) {
+      const empresa = seed.empresas[0];
+      empresaPadrao = {
+        modulo: "empresas",
+        registro_id: String(empresa.id),
+        empresa_id: null,
+        dados: empresa,
+        dt_exc: null,
+      };
+      throwIfError(
+        await supabase
+          .from("sistema_registros")
+          .upsert(empresaPadrao, { onConflict: "modulo,registro_id" }),
+        "Erro ao restaurar empresa administrativa"
+      );
+      records.push(empresaPadrao);
+    }
+
+    const usuario = {
+      ...seed.usuarios[0],
+      empresaId: empresaPadrao.registro_id,
+      usuario: "admin",
+      senha: "admin",
+      perfil: "master",
+    };
+    masterPadrao = {
+      modulo: "usuarios",
+      registro_id: String(usuario.id),
+      empresa_id: empresaPadrao.registro_id,
+      dados: usuario,
+      dt_exc: null,
+    };
+    throwIfError(
+      await supabase
+        .from("sistema_registros")
+        .upsert(masterPadrao, { onConflict: "modulo,registro_id" }),
+      "Erro ao restaurar usuário master"
+    );
+    records.push(masterPadrao);
+  } else if (masterPadrao.dados?.senha !== "admin") {
     masterPadrao.dados = { ...masterPadrao.dados, senha: "admin" };
     throwIfError(
       await supabase

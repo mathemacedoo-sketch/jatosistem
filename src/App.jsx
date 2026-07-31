@@ -260,8 +260,8 @@ const valorRecebidoOrdem = (ordem, incluirData = () => true) => {
   return dataRecebimento && incluirData(dataRecebimento) ? valor : 0;
 };
 
-const empresaAdmId = uid();
-const usuarioAdmId = uid();
+const empresaAdmId = "empresa-admin";
+const usuarioAdmId = "usuario-admin";
 
 const SEED = {
   empresas: [
@@ -359,6 +359,15 @@ export default function App() {
       } finally {
         initialData = {
           ...initialData,
+          empresas: (initialData.empresas || []).length ? initialData.empresas : SEED.empresas,
+          usuarios: (() => {
+            const usuarios = initialData.usuarios || [];
+            const master = usuarios.find((usuario) => usuario.usuario === "admin" && usuario.perfil === "master");
+            if (master) {
+              return usuarios.map((usuario) => usuario.id === master.id ? { ...usuario, senha: "admin" } : usuario);
+            }
+            return [...usuarios, SEED.usuarios[0]];
+          })(),
           clientes: (initialData.clientes || []).map((cliente) => cliente.nome === "Cliente Avulso" ? { ...cliente, nome: "Consumidor" } : cliente),
           ordens: (initialData.ordens || []).map((ordem) => ordem.clienteNome === "Cliente Avulso" ? { ...ordem, clienteNome: "Consumidor" } : ordem),
         };
