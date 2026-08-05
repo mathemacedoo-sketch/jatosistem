@@ -22,7 +22,8 @@ import {
   UserCog,
   Pencil,
   Printer,
-  RotateCcw
+  RotateCcw,
+  ExternalLink
 } from "lucide-react";
 
 // ---------- helpers ----------
@@ -1464,6 +1465,16 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
       </header>}
 
       <Card className="p-5 space-y-4">
+        <div className="flex justify-end">
+          <a
+            href="https://issprudente.sp.gov.br/contrib/Account/Login"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-xl border border-emerald-700 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-100"
+          >
+            <ExternalLink size={16} /> Emitir nota de serviço
+          </a>
+        </div>
         <Field label="Cliente">
           <button
             type="button"
