@@ -1259,17 +1259,17 @@ function OrdensWorkspace({ db, update, empresa, ordemEmEdicao, setOrdemEmEdicao,
     <div className="space-y-6">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="headline text-2xl font-bold text-slate-900">Ordens de serviÃ§o</h1>
+          <h1 className="headline text-2xl font-bold text-slate-900">{"Ordens de Servi\u00e7o"}</h1>
           <p className="mt-1 text-sm text-slate-500">
-            {modo === "lista" ? `${ordens.length} ordem(ns) cadastrada(s)${pendentes ? ` Â· ${pendentes} pendente(s)` : ""}.` : ordemEmEdicao ? `Continuando a OS #${ordemEmEdicao.numero}.` : "Preencha os dados para registrar uma nova OS."}
+            {modo === "lista" ? `${ordens.length} ordem(ns) cadastrada(s)${pendentes ? ` \u00b7 ${pendentes} pendente(s)` : ""}.` : ordemEmEdicao ? `Continuando a OS #${ordemEmEdicao.numero}.` : "Preencha os dados para registrar uma nova OS."}
           </p>
         </div>
         <div className="flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
-          <button onClick={abrirLista} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition ${modo === "lista" ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-50"}`}>
-            <ClipboardList size={16} /> Lista de OS
-          </button>
           <button onClick={abrirNova} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition ${modo === "formulario" ? "bg-gradient-to-br from-orange-500 to-violet-600 text-white" : "text-slate-500 hover:bg-slate-50"}`}>
             <FilePlus2 size={16} /> Nova OS
+          </button>
+          <button onClick={abrirLista} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition ${modo === "lista" ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-50"}`}>
+            <ClipboardList size={16} /> Lista de OS
           </button>
         </div>
       </header>
