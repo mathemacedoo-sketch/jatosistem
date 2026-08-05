@@ -109,7 +109,7 @@ const imprimirReciboOS = (ordem, empresa = {}, cliente = {}) => {
           .print-note { margin-top: 25px; text-align: center; font-size: 11px; color: #94a3b8; }
           .actions { max-width: 760px; margin: 0 auto 16px; display: flex; justify-content: flex-end; gap: 10px; }
           .actions button { border: 0; border-radius: 9px; padding: 11px 18px; cursor: pointer; font-weight: bold; }
-          .print-button { background: #ea580c; color: white; }
+          .print-button { background: #b45309; color: white; }
           .close-button { background: #e2e8f0; color: #334155; }
           @media print { body { padding: 0; } .actions { display: none; } .receipt { border: 0; max-width: none; } @page { margin: 12mm; } }
         </style>
@@ -309,7 +309,7 @@ function Field({ label, children }) {
   );
 }
 const inputCls =
-  "w-full rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm text-slate-700 shadow-sm placeholder:text-slate-400 transition focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-500";
+  "w-full rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm text-slate-700 shadow-sm placeholder:text-slate-400 transition focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-700";
 
 function Card({ children, className = "" }) {
   return (
@@ -325,8 +325,8 @@ function Badge({ tone = "slate", children }) {
     green: "bg-emerald-100 text-emerald-700",
     amber: "bg-amber-100 text-amber-700",
     red: "bg-red-100 text-red-700",
-    cyan: "bg-violet-100 text-violet-700",
-    violet: "bg-violet-100 text-violet-700",
+    cyan: "bg-emerald-100 text-emerald-800",
+    violet: "bg-emerald-100 text-emerald-800",
   };
   return (
     <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${tones[tone]}`}>
@@ -573,14 +573,14 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen w-full bg-[radial-gradient(circle_at_top_left,_rgba(249,115,22,0.18),_transparent_35%),linear-gradient(135deg,_#fff7ed_0%,_#f5f3ff_100%)] text-slate-800 flex" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
+    <div className="min-h-screen w-full bg-[radial-gradient(circle_at_top_left,_rgba(180,83,9,0.12),_transparent_35%),linear-gradient(135deg,_#f8fafc_0%,_#ecfdf5_100%)] text-slate-800 flex" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
         .headline { font-family: 'Space Grotesk', system-ui, sans-serif; }
       `}</style>
 
       {/* Sidebar */}
-      <aside className="w-64 shrink-0 bg-gradient-to-b from-slate-950 via-[#2f1548] to-[#4c1d95] text-white flex flex-col shadow-[12px_0_40px_-20px_rgba(15,23,42,0.65)]">
+      <aside className="w-64 shrink-0 bg-gradient-to-b from-[#032e25] via-[#064e3b] to-[#0b614c] text-white flex flex-col shadow-[12px_0_40px_-20px_rgba(3,46,37,0.65)]">
         <div className="px-4 pt-5 pb-3">
           <div className="overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-white/20">
             <img src="/vermax-logo.png" alt="VERMAX ERP" className="h-auto w-full object-contain" />
@@ -594,8 +594,8 @@ export default function App() {
           <path d="M0,6 C40,0 80,12 120,6 C160,0 200,12 256,6 L256,12 L0,12 Z" fill="url(#wave)" />
           <defs>
             <linearGradient id="wave" x1="0" x2="1">
-              <stop offset="0%" stopColor="#22D3EE" />
-              <stop offset="100%" stopColor="#2563EB" />
+              <stop offset="0%" stopColor="#c2410c" />
+              <stop offset="100%" stopColor="#065f46" />
             </linearGradient>
           </defs>
         </svg>
@@ -624,7 +624,7 @@ export default function App() {
                 <Icon size={17} />
                 {n.label}
                 {n.id === "estoque" && stats.estoqueBaixo.length > 0 && (
-                  <span className="ml-auto bg-amber-400 text-[#0B1F3A] text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                  <span className="ml-auto bg-amber-400 text-[#052e25] text-[10px] font-bold px-1.5 py-0.5 rounded-full">
                     {stats.estoqueBaixo.length}
                   </span>
                 )}
@@ -660,7 +660,7 @@ export default function App() {
 function LoginScreen({ auth, setAuth, entrar, db }) {
   const [erro, setErro] = useState("");
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
+    <div className="min-h-screen flex items-center justify-center bg-[radial-gradient(circle_at_top_left,_rgba(180,83,9,0.14),_transparent_35%),linear-gradient(135deg,_#f8fafc_0%,_#ecfdf5_100%)] p-6">
       <Card className="w-full max-w-md p-6 space-y-4">
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
           <img src="/vermax-logo.png" alt="VERMAX ERP" className="h-auto w-full object-contain" />
@@ -679,7 +679,7 @@ function LoginScreen({ auth, setAuth, entrar, db }) {
           <input type="password" className={inputCls} value={auth.senha} onChange={(e) => setAuth((prev) => ({ ...prev, senha: e.target.value }))} />
         </Field>
         {erro && <div className="text-sm text-red-600">{erro}</div>}
-        <button onClick={() => { const user = (db.usuarios || []).find((u) => u.usuario === auth.usuario && u.senha === auth.senha); if (!user) { setErro("Usuário ou senha inválidos."); return; } setErro(""); entrar(); }} className="w-full rounded-xl bg-gradient-to-br from-orange-500 to-violet-600 text-white font-semibold py-2.5">Entrar</button>
+        <button onClick={() => { const user = (db.usuarios || []).find((u) => u.usuario === auth.usuario && u.senha === auth.senha); if (!user) { setErro("Usuário ou senha inválidos."); return; } setErro(""); entrar(); }} className="w-full rounded-xl bg-gradient-to-br from-orange-700 to-emerald-800 text-white font-semibold py-2.5">Entrar</button>
       </Card>
     </div>
   );
@@ -765,7 +765,7 @@ function EmpresasScreen({ db, update }) {
         <Field label="UF"><input maxLength={2} className={inputCls} value={form.estado} onChange={(e) => setForm((prev) => ({ ...prev, estado: e.target.value.toUpperCase() }))} /></Field>
         </div>
         <div className="flex gap-2">
-          <button onClick={add} className="rounded-xl bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white">{editandoId ? "Salvar alterações" : "Salvar empresa"}</button>
+          <button onClick={add} className="rounded-xl bg-orange-700 px-4 py-2.5 text-sm font-semibold text-white">{editandoId ? "Salvar alterações" : "Salvar empresa"}</button>
           {editandoId && <button onClick={() => { setEditandoId(null); setForm(empresaFormInicial); }} className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600">Cancelar</button>}
         </div>
       </Card>
@@ -792,7 +792,7 @@ function EmpresasScreen({ db, update }) {
                         <option value="estetica">Estética</option>
                         <option value="outro">Outro</option>
                       </select>
-                      <button onClick={() => salvarEdicaoSegmento(empresa.id)} className="text-sm font-semibold text-orange-600">Salvar</button>
+                      <button onClick={() => salvarEdicaoSegmento(empresa.id)} className="text-sm font-semibold text-orange-700">Salvar</button>
                       <button onClick={cancelarEdicaoSegmento} className="text-sm text-slate-500">Cancelar</button>
                     </div>
                   ) : (
@@ -802,7 +802,7 @@ function EmpresasScreen({ db, update }) {
                 <td className="px-4 py-3 text-slate-500">{fmtDate(empresa.criadoEm)}</td>
                 <td className="px-4 py-3 text-slate-500">
                   {segmentoEditandoId === empresa.id ? null : (
-                    <button onClick={() => editarEmpresa(empresa)} className="text-sm font-semibold text-violet-600 hover:text-violet-700">Editar</button>
+                    <button onClick={() => editarEmpresa(empresa)} className="text-sm font-semibold text-emerald-700 hover:text-emerald-800">Editar</button>
                   )}
                 </td>
               </tr>
@@ -923,7 +923,7 @@ function UsuariosScreen({ db, update, isMaster, empresaId }) {
         </Field>
         {erroSalvar && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{erroSalvar}</div>}
         <div className="flex gap-2">
-          <button disabled={salvando} onClick={add} className="rounded-xl bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-wait disabled:opacity-60">{salvando ? "Salvando..." : editandoId ? "Salvar alterações" : "Salvar usuário"}</button>
+          <button disabled={salvando} onClick={add} className="rounded-xl bg-orange-700 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-wait disabled:opacity-60">{salvando ? "Salvando..." : editandoId ? "Salvar alterações" : "Salvar usuário"}</button>
           {editandoId && <button onClick={() => { setEditandoId(null); setForm({ nome: "", usuario: "", senha: "", perfil: "usuario", empresaId }); }} className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600">Cancelar</button>}
         </div>
       </Card>
@@ -941,7 +941,7 @@ function UsuariosScreen({ db, update, isMaster, empresaId }) {
                 <td className="px-4 py-3 text-slate-500">{usuario.perfil === "master" ? "Master" : usuario.perfil === "gerente" ? "Gerente" : "Usuário"}</td>
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-end gap-3">
-                    <button onClick={() => editarUsuario(usuario)} className="text-slate-400 hover:text-violet-600" title="Editar usuário"><Pencil size={16} /></button>
+                    <button onClick={() => editarUsuario(usuario)} className="text-slate-400 hover:text-emerald-700" title="Editar usuário"><Pencil size={16} /></button>
                     <button onClick={() => removerUsuario(usuario)} className="text-slate-400 hover:text-red-500" title="Excluir usuário"><Trash2 size={16} /></button>
                   </div>
                 </td>
@@ -994,7 +994,7 @@ function FuncionariosScreen({ db, update, empresaId }) {
           <input className={inputCls} value={form.cargo} onChange={(e) => setForm((prev) => ({ ...prev, cargo: e.target.value }))} />
         </Field>
         <div className="flex gap-2">
-          <button onClick={add} className="rounded-xl bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white">{editandoId ? "Salvar alterações" : "Salvar funcionário"}</button>
+          <button onClick={add} className="rounded-xl bg-orange-700 px-4 py-2.5 text-sm font-semibold text-white">{editandoId ? "Salvar alterações" : "Salvar funcionário"}</button>
           {editandoId && <button onClick={() => { setEditandoId(null); setForm({ nome: "", cargo: "" }); }} className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600">Cancelar</button>}
         </div>
       </Card>
@@ -1012,7 +1012,7 @@ function FuncionariosScreen({ db, update, empresaId }) {
                 <tr key={funcionario.id}>
                   <td className="px-4 py-3 font-medium">{funcionario.nome}</td>
                   <td className="px-4 py-3 text-slate-500">{funcionario.cargo || "-"}</td>
-                  <td className="px-4 py-3 text-right"><div className="flex justify-end gap-3"><button onClick={() => editarFuncionario(funcionario)} className="text-slate-400 hover:text-violet-600"><Pencil size={16} /></button><button onClick={() => remove(funcionario.id)} className="text-slate-400 hover:text-red-500"><Trash2 size={16} /></button></div></td>
+                  <td className="px-4 py-3 text-right"><div className="flex justify-end gap-3"><button onClick={() => editarFuncionario(funcionario)} className="text-slate-400 hover:text-emerald-700"><Pencil size={16} /></button><button onClick={() => remove(funcionario.id)} className="text-slate-400 hover:text-red-500"><Trash2 size={16} /></button></div></td>
                 </tr>
               ))}
             </tbody>
@@ -1074,8 +1074,8 @@ function Dashboard({ db, stats }) {
 
 function StatCard({ icon: Icon, label, value, tone }) {
   const tones = {
-    cyan: "from-orange-500 to-violet-600",
-    amber: "from-amber-400 to-orange-500",
+    cyan: "from-orange-700 to-emerald-800",
+    amber: "from-amber-400 to-orange-700",
     red: "from-rose-500 to-red-600",
     slate: "from-slate-500 to-slate-700",
   };
@@ -1118,7 +1118,7 @@ function ReciboOSModal({ ordem, empresa = {}, cliente = {}, onClose }) {
       <div className="my-auto w-full max-w-[210mm]">
         <div className="os-print-actions mb-3 flex justify-end gap-2">
           <button onClick={onClose} className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow">Fechar</button>
-          <button onClick={() => window.print()} className="flex items-center gap-2 rounded-xl bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white shadow">
+          <button onClick={() => window.print()} className="flex items-center gap-2 rounded-xl bg-orange-700 px-4 py-2.5 text-sm font-semibold text-white shadow">
             <Printer size={17} /> Imprimir / Salvar PDF
           </button>
         </div>
@@ -1201,7 +1201,7 @@ function ReciboFinanceiroModal({ tipo, conta, empresa = {}, onClose }) {
       <div className="my-auto w-full max-w-[210mm]">
         <div className="finance-print-actions mb-3 flex justify-end gap-2">
           <button onClick={onClose} className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow">Fechar</button>
-          <button onClick={() => window.print()} className="flex items-center gap-2 rounded-xl bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white shadow"><Printer size={17} /> Imprimir / Salvar PDF</button>
+          <button onClick={() => window.print()} className="flex items-center gap-2 rounded-xl bg-orange-700 px-4 py-2.5 text-sm font-semibold text-white shadow"><Printer size={17} /> Imprimir / Salvar PDF</button>
         </div>
         <article className="finance-print-area mx-auto min-h-[297mm] w-[210mm] max-w-full bg-white p-7 text-sm text-slate-800 shadow-2xl sm:p-[15mm]">
           <header className="flex justify-between gap-6 border-b-2 border-slate-800 pb-5">
@@ -1267,7 +1267,7 @@ function OrdensWorkspace({ db, update, empresa, ordemEmEdicao, setOrdemEmEdicao,
           </p>
         </div>
         <div className="flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
-          <button onClick={abrirNova} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition ${modo === "formulario" ? "bg-gradient-to-br from-orange-500 to-violet-600 text-white" : "text-slate-500 hover:bg-slate-50"}`}>
+          <button onClick={abrirNova} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition ${modo === "formulario" ? "bg-gradient-to-br from-orange-700 to-emerald-800 text-white" : "text-slate-500 hover:bg-slate-50"}`}>
             <FilePlus2 size={16} /> Nova OS
           </button>
           <button onClick={abrirLista} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition ${modo === "lista" ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-50"}`}>
@@ -1469,7 +1469,7 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
             className={inputCls + " flex items-center justify-between text-left"}
           >
             <span>{clienteId ? (() => { const cliente = clientesComCodigo.find((item) => item.id === clienteId); return cliente ? `#${cliente.codigoExibicao} · ${cliente.nome}${cliente.placa ? ` · ${cliente.placa}` : ""}` : "Selecionar cliente"; })() : "Selecionar cliente"}</span>
-            <Search size={17} className="text-violet-600" />
+            <Search size={17} className="text-emerald-700" />
           </button>
         </Field>
 
@@ -1544,7 +1544,7 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
               <input type="number" min="1" className={inputCls} value={qtd} onChange={(e) => setQtd(e.target.value)} />
             </Field>
           </div>
-          <button onClick={addItem} disabled={!itemSel} className="flex items-center gap-1.5 text-sm font-semibold text-violet-700 disabled:text-slate-300">
+          <button onClick={addItem} disabled={!itemSel} className="flex items-center gap-1.5 text-sm font-semibold text-emerald-800 disabled:text-slate-300">
             <Plus size={16} /> Adicionar à ordem
           </button>
         </div>
@@ -1567,7 +1567,7 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
                       </Field>
                     </div>
                     <div className="flex gap-2">
-                      <button onClick={salvarEdicaoItem} className="rounded-lg bg-orange-600 px-3 py-2 text-sm font-semibold text-white">Salvar</button>
+                      <button onClick={salvarEdicaoItem} className="rounded-lg bg-orange-700 px-3 py-2 text-sm font-semibold text-white">Salvar</button>
                       <button onClick={() => { setEditandoItem(null); setEditForm({ descricao: "", valor: "", qtd: "" }); }} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-600">Cancelar</button>
                     </div>
                   </div>
@@ -1579,7 +1579,7 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="font-semibold">{brl(i.subtotal)}</span>
-                      <button onClick={() => abrirEdicaoItem(i)} className="text-slate-400 hover:text-violet-600" title="Editar item">
+                      <button onClick={() => abrirEdicaoItem(i)} className="text-slate-400 hover:text-emerald-700" title="Editar item">
                         <Pencil size={15} />
                       </button>
                       <button onClick={() => removeItem(i.uidLine)} className="text-slate-400 hover:text-red-500" title="Remover item">
@@ -1662,10 +1662,10 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row">
-          <button onClick={() => salvar(false)} disabled={itens.length === 0 || !clienteId} className="w-full rounded-xl border border-violet-300 bg-white px-5 py-2.5 text-sm font-semibold text-violet-700 disabled:opacity-40 sm:w-auto">
+          <button onClick={() => salvar(false)} disabled={itens.length === 0 || !clienteId} className="w-full rounded-xl border border-emerald-300 bg-white px-5 py-2.5 text-sm font-semibold text-emerald-800 disabled:opacity-40 sm:w-auto">
             Salvar OS
           </button>
-          <button onClick={() => salvar(true)} disabled={itens.length === 0 || !clienteId} className="w-full rounded-xl bg-gradient-to-br from-orange-500 to-violet-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40 sm:w-auto">
+          <button onClick={() => salvar(true)} disabled={itens.length === 0 || !clienteId} className="w-full rounded-xl bg-gradient-to-br from-orange-700 to-emerald-800 px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40 sm:w-auto">
             Concluir OS
           </button>
         </div>
@@ -1964,7 +1964,7 @@ function Ordens({ db, update, empresa, onEditarNaOS, embedded = false }) {
           <div className="flex justify-end gap-2">
             <button onClick={() => salvarEdicao(false)} className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700">Salvar alterações</button>
             {["rascunho", "pendente", "estornado"].includes(db.ordens.find((ordem) => ordem.id === editandoOrdemId)?.statusOS) && (
-              <button onClick={() => salvarEdicao(true)} className="rounded-xl bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white">Concluir OS</button>
+              <button onClick={() => salvarEdicao(true)} className="rounded-xl bg-orange-700 px-4 py-2.5 text-sm font-semibold text-white">Concluir OS</button>
             )}
           </div>
         </Card>
@@ -2009,7 +2009,7 @@ function Ordens({ db, update, empresa, onEditarNaOS, embedded = false }) {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-3">
-                      <button onClick={() => imprimir(o)} className="text-slate-400 hover:text-orange-600" title="Imprimir ou salvar recibo em PDF">
+                      <button onClick={() => imprimir(o)} className="text-slate-400 hover:text-orange-700" title="Imprimir ou salvar recibo em PDF">
                         <Printer size={17} />
                       </button>
                       {!["rascunho", "pendente", "estornado"].includes(o.statusOS) && o.formaPagamento !== "Carteira" && o.statusPagamento !== "pago" && (
@@ -2017,7 +2017,7 @@ function Ordens({ db, update, empresa, onEditarNaOS, embedded = false }) {
                           <CheckCircle2 size={17} />
                         </button>
                       )}
-                      {["rascunho", "pendente", "estornado"].includes(o.statusOS) && <button onClick={() => onEditarNaOS(o)} className="text-slate-400 hover:text-violet-600" title="Continuar venda / editar OS"><Pencil size={16} /></button>}
+                      {["rascunho", "pendente", "estornado"].includes(o.statusOS) && <button onClick={() => onEditarNaOS(o)} className="text-slate-400 hover:text-emerald-700" title="Continuar venda / editar OS"><Pencil size={16} /></button>}
                       {!["rascunho", "pendente", "estornado"].includes(o.statusOS) && <button onClick={() => estornar(o)} className="text-amber-600 hover:text-red-600" title="Estornar OS"><RotateCcw size={17} /></button>}
                       {["rascunho", "pendente", "estornado"].includes(o.statusOS) && <button onClick={() => excluir(o.id)} className="text-slate-400 hover:text-red-500" title="Excluir"><Trash2 size={16} /></button>}
                     </div>
@@ -2112,7 +2112,7 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
             </div>
           )}
         </div>
-        <button onClick={add} className="mt-3 flex items-center gap-1.5 text-sm font-semibold text-violet-700"><Plus size={16} /> Adicionar cliente</button>
+        <button onClick={add} className="mt-3 flex items-center gap-1.5 text-sm font-semibold text-emerald-800"><Plus size={16} /> Adicionar cliente</button>
       </Card>
 
       <div className="relative max-w-xs">
@@ -2177,7 +2177,7 @@ function Servicos({ db, update }) {
           <Field label="Nome do serviço"><input className={inputCls} value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} /></Field>
           <Field label="Preço"><input type="number" className={inputCls} value={form.preco} onChange={(e) => setForm({ ...form, preco: e.target.value })} /></Field>
         </div>
-        <button onClick={add} className="mt-3 flex items-center gap-1.5 text-sm font-semibold text-violet-700"><Plus size={16} /> Adicionar serviço</button>
+        <button onClick={add} className="mt-3 flex items-center gap-1.5 text-sm font-semibold text-emerald-800"><Plus size={16} /> Adicionar serviço</button>
       </Card>
 
       <Card className="p-0 overflow-hidden">
@@ -2267,7 +2267,7 @@ function Estoque({ db, update }) {
         <div className="grid grid-cols-1 sm:grid-cols-6 gap-3 mt-3">
           <Field label="Preço de venda (se revendido)"><input type="number" className={inputCls} value={form.precoVenda} onChange={(e) => setForm({ ...form, precoVenda: e.target.value })} /></Field>
         </div>
-        <button onClick={add} className="mt-3 flex items-center gap-1.5 text-sm font-semibold text-violet-700"><Plus size={16} /> Adicionar produto</button>
+        <button onClick={add} className="mt-3 flex items-center gap-1.5 text-sm font-semibold text-emerald-800"><Plus size={16} /> Adicionar produto</button>
       </Card>
 
       <Card className="p-5 bg-slate-50 border border-slate-200 space-y-3">
@@ -2290,7 +2290,7 @@ function Estoque({ db, update }) {
             <input type="number" min="0" className={inputCls} value={acerto.valor} onChange={(e) => setAcerto((prev) => ({ ...prev, valor: e.target.value }))} />
           </Field>
           <div className="flex items-end">
-            <button onClick={salvarAcerto} className="w-full rounded-xl bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white">Salvar acerto</button>
+            <button onClick={salvarAcerto} className="w-full rounded-xl bg-orange-700 px-4 py-2.5 text-sm font-semibold text-white">Salvar acerto</button>
           </div>
         </div>
       </Card>
@@ -2551,7 +2551,7 @@ function ContasReceber({ db, update, empresa }) {
           <Field label="Vencimento"><input type="date" className={inputCls} value={formReceber.vencimento} onChange={(e) => setFormReceber((prev) => ({ ...prev, vencimento: e.target.value }))} /></Field>
         </div>
         <div className="mt-3 flex gap-3">
-          <button onClick={salvarReceber} className="flex items-center gap-1.5 text-sm font-semibold text-violet-700">{editandoReceber ? <Pencil size={16} /> : <Plus size={16} />} {editandoReceber ? "Salvar alterações" : "Adicionar recebimento"}</button>
+          <button onClick={salvarReceber} className="flex items-center gap-1.5 text-sm font-semibold text-emerald-800">{editandoReceber ? <Pencil size={16} /> : <Plus size={16} />} {editandoReceber ? "Salvar alterações" : "Adicionar recebimento"}</button>
           {editandoReceber && <button onClick={() => { setEditandoReceber(null); setFormReceber(receberInicial); }} className="text-sm text-slate-500">Cancelar</button>}
         </div>
       </Card>
@@ -2611,8 +2611,8 @@ function ContasReceber({ db, update, empresa }) {
                     <td className="px-4 py-3">{vencida ? <Badge tone="red">Vencida</Badge> : <StatusBadge status={o.statusPagamento} />}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-3">
-                        <button onClick={() => setReciboFinanceiro(o)} className="text-slate-400 hover:text-orange-600" title="Gerar recibo"><Printer size={17} /></button>
-                        <button onClick={() => editarReceber(o)} className="text-slate-400 hover:text-violet-600" title="Editar"><Pencil size={16} /></button>
+                        <button onClick={() => setReciboFinanceiro(o)} className="text-slate-400 hover:text-orange-700" title="Gerar recibo"><Printer size={17} /></button>
+                        <button onClick={() => editarReceber(o)} className="text-slate-400 hover:text-emerald-700" title="Editar"><Pencil size={16} /></button>
                         {o.statusPagamento !== "pago" && <button onClick={() => abrirBaixa(o)} className="text-emerald-600 hover:text-emerald-700" title="Registrar baixa"><CheckCircle2 size={17} /></button>}
                       </div>
                     </td>
@@ -2784,7 +2784,7 @@ function ContasPagar({ db, update, empresa }) {
           <Field label="Vencimento"><input type="date" className={inputCls} value={form.vencimento} onChange={(e) => setForm({ ...form, vencimento: e.target.value })} /></Field>
         </div>
         <div className="mt-3 flex gap-3">
-          <button onClick={add} className="flex items-center gap-1.5 text-sm font-semibold text-violet-700">{editandoId ? <Pencil size={16} /> : <Plus size={16} />} {editandoId ? "Salvar alterações" : "Adicionar conta"}</button>
+          <button onClick={add} className="flex items-center gap-1.5 text-sm font-semibold text-emerald-800">{editandoId ? <Pencil size={16} /> : <Plus size={16} />} {editandoId ? "Salvar alterações" : "Adicionar conta"}</button>
           {editandoId && <button onClick={() => { setEditandoId(null); setForm({ descricao: "", categoria: "Fornecedor", valor: "", vencimento: todayISO() }); }} className="text-sm text-slate-500">Cancelar</button>}
         </div>
       </Card>
@@ -2817,11 +2817,11 @@ function ContasPagar({ db, update, empresa }) {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-3">
-                        <button onClick={() => setReciboFinanceiro(c)} className="text-slate-400 hover:text-orange-600" title="Gerar recibo"><Printer size={17} /></button>
+                        <button onClick={() => setReciboFinanceiro(c)} className="text-slate-400 hover:text-orange-700" title="Gerar recibo"><Printer size={17} /></button>
                         {c.status !== "pago" && (
                           <button onClick={() => abrirBaixa(c)} className="text-emerald-600 hover:text-emerald-700" title="Registrar baixa"><CheckCircle2 size={17} /></button>
                         )}
-                        <button onClick={() => editarConta(c)} className="text-slate-400 hover:text-violet-600" title="Editar"><Pencil size={16} /></button>
+                        <button onClick={() => editarConta(c)} className="text-slate-400 hover:text-emerald-700" title="Editar"><Pencil size={16} /></button>
                         <button onClick={() => remove(c.id)} className="text-slate-400 hover:text-red-500" title="Excluir"><Trash2 size={16} /></button>
                       </div>
                     </td>
