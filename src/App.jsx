@@ -418,13 +418,14 @@ export default function App() {
         const savedUi = loadSavedUi();
         const savedUser = (initialData.usuarios || []).find((usuario) => usuario.id === savedUi.usuarioId);
         if (savedUser) {
-          const allowedUserTabs = ["nova-os", "ordens", "clientes"];
-          const managerTabs = ["dashboard", "nova-os", "ordens", "clientes", "funcionarios", "servicos", "estoque", "receber", "pagar", "usuarios"];
+          const allowedUserTabs = ["ordens", "clientes"];
+          const managerTabs = ["dashboard", "ordens", "clientes", "funcionarios", "servicos", "estoque", "receber", "pagar", "usuarios"];
           const masterTabs = [...managerTabs, "empresas"];
           const allowedTabs = savedUser.perfil === "master" ? masterTabs : savedUser.perfil === "gerente" ? managerTabs : allowedUserTabs;
-          const restoredTab = allowedTabs.includes(savedUi.tab)
-            ? savedUi.tab
-            : savedUser.perfil === "usuario" ? "nova-os" : "dashboard";
+          const savedTab = savedUi.tab === "nova-os" ? "ordens" : savedUi.tab;
+          const restoredTab = allowedTabs.includes(savedTab)
+            ? savedTab
+            : savedUser.perfil === "usuario" ? "ordens" : "dashboard";
           setAuth({ usuario: savedUser.usuario, senha: "", empresaId: savedUser.empresaId || savedUi.empresaId || "", usuarioLogado: savedUser });
           setTab(restoredTab);
         }
@@ -508,7 +509,7 @@ export default function App() {
   const isMaster = authUser?.perfil === "master";
   const isGerente = authUser?.perfil === "gerente";
   const podeGerenciarUsuarios = isMaster || isGerente;
-  const tabsUsuario = ["nova-os", "ordens", "clientes"];
+  const tabsUsuario = ["ordens", "clientes"];
   const podeAcessar = (tabId) => isMaster || isGerente || tabsUsuario.includes(tabId);
 
   const entrar = () => {
@@ -516,7 +517,7 @@ export default function App() {
     if (!user) return;
     const empresaId = user.empresaId || (auth.empresaId || empresas[0]?.id || "");
     setAuth((prev) => ({ ...prev, empresaId, usuarioLogado: user }));
-    setTab(user.perfil === "usuario" ? "nova-os" : "dashboard");
+    setTab(user.perfil === "usuario" ? "ordens" : "dashboard");
   };
 
   const sair = () => {
@@ -555,7 +556,6 @@ export default function App() {
 
   const NAV = [
     { id: "dashboard", label: "Painel", icon: LayoutDashboard },
-    { id: "nova-os", label: "Nova OS", icon: FilePlus2 },
     { id: "ordens", label: "Ordens de Serviço", icon: ClipboardList },
     { id: "clientes", label: "Clientes", icon: Users },
     { id: "funcionarios", label: "Funcionários", icon: UserCog },
@@ -643,8 +643,7 @@ export default function App() {
       <main ref={mainRef} onScroll={saveScrollPosition} className="flex-1 min-w-0 overflow-y-auto">
         <div className="max-w-7xl mx-auto p-6 md:p-8">
           {tab === "dashboard" && podeAcessar("dashboard") && <Dashboard db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} stats={stats} />}
-          {tab === "nova-os" && <NovaOS db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresa={empresaAtiva} ordemEmEdicao={ordemEmEdicao} onFinalizarEdicao={() => setOrdemEmEdicao(null)} podeEditarValor={isMaster || isGerente} />}
-          {tab === "ordens" && <Ordens db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresa={empresaAtiva} onEditarNaOS={(ordem) => { setOrdemEmEdicao(ordem); setTab("nova-os"); }} />}
+          {tab === "ordens" && <OrdensWorkspace db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresa={empresaAtiva} ordemEmEdicao={ordemEmEdicao} setOrdemEmEdicao={setOrdemEmEdicao} podeEditarValor={isMaster || isGerente} />}
           {tab === "clientes" && <Clientes db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresaId={auth.empresaId || auth.usuarioLogado?.empresaId || ""} empresaSegmento={empresaAtiva?.segmento || "lava-jato"} />}
           {tab === "funcionarios" && podeAcessar("funcionarios") && <FuncionariosScreen db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresaId={auth.empresaId || auth.usuarioLogado?.empresaId || ""} />}
           {tab === "servicos" && podeAcessar("servicos") && <Servicos db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} />}
@@ -1234,8 +1233,72 @@ function ReciboFinanceiroModal({ tipo, conta, empresa = {}, onClose }) {
   );
 }
 
+// ---------- Ordens de servico (cadastro + historico) ----------
+function OrdensWorkspace({ db, update, empresa, ordemEmEdicao, setOrdemEmEdicao, podeEditarValor }) {
+  const [modo, setModo] = useState(ordemEmEdicao ? "formulario" : "lista");
+  const [formKey, setFormKey] = useState(0);
+  const ordens = (db.ordens || []).filter((ordem) => !ordem.lancamentoManual);
+  const pendentes = ordens.filter((ordem) => ["rascunho", "pendente", "estornado"].includes(ordem.statusOS)).length;
+
+  const abrirNova = () => {
+    setOrdemEmEdicao(null);
+    setFormKey((value) => value + 1);
+    setModo("formulario");
+  };
+  const abrirEdicao = (ordem) => {
+    setOrdemEmEdicao(ordem);
+    setFormKey((value) => value + 1);
+    setModo("formulario");
+  };
+  const abrirLista = () => {
+    setOrdemEmEdicao(null);
+    setModo("lista");
+  };
+
+  return (
+    <div className="space-y-6">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="headline text-2xl font-bold text-slate-900">Ordens de serviÃ§o</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            {modo === "lista" ? `${ordens.length} ordem(ns) cadastrada(s)${pendentes ? ` Â· ${pendentes} pendente(s)` : ""}.` : ordemEmEdicao ? `Continuando a OS #${ordemEmEdicao.numero}.` : "Preencha os dados para registrar uma nova OS."}
+          </p>
+        </div>
+        <div className="flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+          <button onClick={abrirLista} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition ${modo === "lista" ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-50"}`}>
+            <ClipboardList size={16} /> Lista de OS
+          </button>
+          <button onClick={abrirNova} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition ${modo === "formulario" ? "bg-gradient-to-br from-orange-500 to-violet-600 text-white" : "text-slate-500 hover:bg-slate-50"}`}>
+            <FilePlus2 size={16} /> Nova OS
+          </button>
+        </div>
+      </header>
+
+      <div className={modo === "formulario" ? "block" : "hidden"}>
+        <NovaOS
+          key={formKey}
+          db={db}
+          update={update}
+          empresa={empresa}
+          ordemEmEdicao={ordemEmEdicao}
+          onFinalizarEdicao={(concluir) => {
+            setOrdemEmEdicao(null);
+            if (!concluir) setModo("lista");
+          }}
+          onConcluirFechado={() => setModo("lista")}
+          podeEditarValor={podeEditarValor}
+          embedded
+        />
+      </div>
+      <div className={modo === "lista" ? "block" : "hidden"}>
+        <Ordens db={db} update={update} empresa={empresa} onEditarNaOS={abrirEdicao} embedded />
+      </div>
+    </div>
+  );
+}
+
 // ---------- Nova OS ----------
-function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, podeEditarValor }) {
+function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcluirFechado, podeEditarValor, embedded = false }) {
   const [clienteId, setClienteId] = useState(db.clientes[0]?.id || "");
   const [buscaCliente, setBuscaCliente] = useState("");
   const [seletorClienteAberto, setSeletorClienteAberto] = useState(false);
@@ -1385,16 +1448,16 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, podeEdi
     setVencimento(todayISO());
     setQtdParcelas(1);
     setFuncionarioId("");
-    onFinalizarEdicao?.();
+    onFinalizarEdicao?.(concluir);
   };
 
   return (
     <div className="space-y-6 max-w-3xl">
-      {recibo && <ReciboOSModal ordem={recibo.ordem} empresa={empresa} cliente={recibo.cliente} onClose={() => setRecibo(null)} />}
-      <header>
+      {recibo && <ReciboOSModal ordem={recibo.ordem} empresa={empresa} cliente={recibo.cliente} onClose={() => { setRecibo(null); onConcluirFechado?.(); }} />}
+      {!embedded && <header>
         <h1 className="headline text-2xl font-bold text-slate-900">{ordemEmEdicao ? `Continuar OS #${ordemEmEdicao.numero}` : "Nova ordem de serviço"}</h1>
         <p className="text-slate-500 text-sm mt-1">{ordemEmEdicao ? "Edite os itens e conclua a venda quando estiver pronta." : "Registre uma venda de serviço e/ou produto."}</p>
-      </header>
+      </header>}
 
       <Card className="p-5 space-y-4">
         <Field label="Cliente">
@@ -1610,7 +1673,7 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, podeEdi
 }
 
 // ---------- Ordens ----------
-function Ordens({ db, update, empresa, onEditarNaOS }) {
+function Ordens({ db, update, empresa, onEditarNaOS, embedded = false }) {
   const [editandoOrdemId, setEditandoOrdemId] = useState(null);
   const [recibo, setRecibo] = useState(null);
   const [filtros, setFiltros] = useState({ busca: "", dataInicial: "", dataFinal: "" });
@@ -1804,10 +1867,10 @@ function Ordens({ db, update, empresa, onEditarNaOS }) {
   return (
     <div className="space-y-6">
       {recibo && <ReciboOSModal ordem={recibo.ordem} empresa={empresa} cliente={recibo.cliente} onClose={() => setRecibo(null)} />}
-      <header>
+      {!embedded && <header>
         <h1 className="headline text-2xl font-bold text-slate-900">Ordens de serviço</h1>
         <p className="text-slate-500 text-sm mt-1">{lista.length} ordem(ns) encontrada(s).</p>
-      </header>
+      </header>}
 
       <Card className="p-5">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_180px_180px_auto] md:items-end">
