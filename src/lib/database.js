@@ -9,6 +9,17 @@ const COLLECTIONS = [
   "ordens",
   "contasPagar",
 ];
+const TENANT_COLLECTIONS = COLLECTIONS.filter((collection) => collection !== "empresas");
+
+const assertTenantIntegrity = (database) => {
+  for (const collection of TENANT_COLLECTIONS) {
+    for (const item of database[collection] || []) {
+      if (!item?.empresaId) {
+        throw new Error(`Registro de ${collection} sem empresa. Salvamento bloqueado para evitar mistura de dados.`);
+      }
+    }
+  }
+};
 
 const clienteFromRow = (row) => ({
   id: row.id,
@@ -153,6 +164,9 @@ export async function loadDatabase(seed) {
 }
 
 export async function createCliente(cliente) {
+  if (!cliente?.empresaId) {
+    throw new Error("Cadastro de cliente bloqueado: empresa nÃ£o informada.");
+  }
   const row = clienteToRow(cliente);
   delete row.id;
   const result = await supabase.from("clientes").insert(row).select("*").single();
@@ -162,6 +176,7 @@ export async function createCliente(cliente) {
 const equal = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 
 export async function syncDatabase(previous, current) {
+  assertTenantIntegrity(current);
   throwIfError(
     await supabase.from("sistema_registros").upsert({
       modulo: "__meta__",

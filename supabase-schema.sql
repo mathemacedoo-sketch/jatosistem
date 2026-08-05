@@ -70,3 +70,71 @@ where modulo = 'usuarios'
   and dados->>'usuario' = 'admin'
   and dados->>'perfil' = 'master'
   and dt_exc is null;
+
+-- Corrige dados antigos sem empresa: eles passam a pertencer Ã  empresa
+-- administrativa mais antiga e deixam de ser compartilhados implicitamente.
+do $$
+declare
+  empresa_padrao text;
+begin
+  select registro_id into empresa_padrao
+  from public.sistema_registros
+  where modulo = 'empresas' and dt_exc is null
+  order by criado_em
+  limit 1;
+
+  if empresa_padrao is not null then
+    update public.sistema_registros
+       set empresa_id = empresa_padrao,
+           dados = jsonb_set(dados, '{empresaId}', to_jsonb(empresa_padrao), true)
+     where modulo not in ('empresas', '__meta__')
+       and empresa_id is null;
+
+    update public.clientes
+       set empresa_id = empresa_padrao
+     where empresa_id is null;
+  end if;
+end $$;
+
+-- Nenhum dado operacional pode existir sem uma empresa.
+alter table public.sistema_registros
+  drop constraint if exists sistema_registros_empresa_obrigatoria;
+alter table public.sistema_registros
+  add constraint sistema_registros_empresa_obrigatoria
+  check (modulo in ('empresas', '__meta__') or empresa_id is not null);
+
+alter table public.clientes
+  alter column empresa_id set not null;
+
+-- Confirma que a empresa indicada realmente existe antes de gravar.
+create or replace function public.validar_empresa_registro()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if new.empresa_id is not null and not exists (
+    select 1
+      from public.sistema_registros empresa
+     where empresa.modulo = 'empresas'
+       and empresa.registro_id = new.empresa_id
+       and empresa.dt_exc is null
+  ) then
+    raise exception 'Empresa inexistente: %', new.empresa_id;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists validar_empresa_sistema_registros on public.sistema_registros;
+create trigger validar_empresa_sistema_registros
+before insert or update of empresa_id on public.sistema_registros
+for each row
+when (new.modulo not in ('empresas', '__meta__'))
+execute function public.validar_empresa_registro();
+
+drop trigger if exists validar_empresa_clientes on public.clientes;
+create trigger validar_empresa_clientes
+before insert or update of empresa_id on public.clientes
+for each row
+execute function public.validar_empresa_registro();

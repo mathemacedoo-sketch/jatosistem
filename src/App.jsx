@@ -190,12 +190,12 @@ const createFuncionario = ({ nome, cargo = "Funcionário", empresaId }) => ({
 
 const getEmpresaData = (db, empresaId) => ({
   ...db,
-  clientes: (db.clientes || []).filter((item) => !item.empresaId || item.empresaId === empresaId),
-  funcionarios: (db.funcionarios || []).filter((item) => !item.empresaId || item.empresaId === empresaId),
-  servicos: (db.servicos || []).filter((item) => !item.empresaId || item.empresaId === empresaId),
-  produtos: (db.produtos || []).filter((item) => !item.empresaId || item.empresaId === empresaId),
-  ordens: (db.ordens || []).filter((item) => !item.empresaId || item.empresaId === empresaId),
-  contasPagar: (db.contasPagar || []).filter((item) => !item.empresaId || item.empresaId === empresaId),
+  clientes: (db.clientes || []).filter((item) => item.empresaId === empresaId),
+  funcionarios: (db.funcionarios || []).filter((item) => item.empresaId === empresaId),
+  servicos: (db.servicos || []).filter((item) => item.empresaId === empresaId),
+  produtos: (db.produtos || []).filter((item) => item.empresaId === empresaId),
+  ordens: (db.ordens || []).filter((item) => item.empresaId === empresaId),
+  contasPagar: (db.contasPagar || []).filter((item) => item.empresaId === empresaId),
 });
 
 const gerarParcelas = (baseId, total, quantidade, vencimentoBase) => {
@@ -290,6 +290,15 @@ const SEED = {
 };
 
 const STORAGE_KEY = "jato_sistem_db_v1";
+const UI_STORAGE_KEY = "jato_sistem_ui_v1";
+
+const loadSavedUi = () => {
+  try {
+    return JSON.parse(localStorage.getItem(UI_STORAGE_KEY) || "{}") || {};
+  } catch {
+    return {};
+  }
+};
 
 // ---------- small UI primitives ----------
 function Field({ label, children }) {
@@ -343,6 +352,7 @@ export default function App() {
   const lastSynced = useRef(SEED);
   const dbRef = useRef(SEED);
   const syncQueue = useRef(Promise.resolve());
+  const mainRef = useRef(null);
 
   const persistSnapshot = (snapshot) => {
     const task = syncQueue.current
@@ -386,6 +396,12 @@ export default function App() {
           clientes: (initialData.clientes || []).map((cliente) => cliente.nome === "Cliente Avulso" ? { ...cliente, nome: "Consumidor" } : cliente),
           ordens: (initialData.ordens || []).map((ordem) => ordem.clienteNome === "Cliente Avulso" ? { ...ordem, clienteNome: "Consumidor" } : ordem),
         };
+        const legacyCompanyId = initialData.empresas[0]?.id || empresaAdmId;
+        ["usuarios", "clientes", "funcionarios", "servicos", "produtos", "ordens", "contasPagar"].forEach((collection) => {
+          initialData[collection] = (initialData[collection] || []).map((item) =>
+            item.empresaId ? item : { ...item, empresaId: legacyCompanyId }
+          );
+        });
         lastSynced.current = remoteInitialized ? initialData : {
           ...initialData,
           empresas: [],
@@ -399,6 +415,19 @@ export default function App() {
         if (!active) return;
         dbRef.current = initialData;
         setDb(initialData);
+        const savedUi = loadSavedUi();
+        const savedUser = (initialData.usuarios || []).find((usuario) => usuario.id === savedUi.usuarioId);
+        if (savedUser) {
+          const allowedUserTabs = ["nova-os", "ordens", "clientes"];
+          const managerTabs = ["dashboard", "nova-os", "ordens", "clientes", "funcionarios", "servicos", "estoque", "receber", "pagar", "usuarios"];
+          const masterTabs = [...managerTabs, "empresas"];
+          const allowedTabs = savedUser.perfil === "master" ? masterTabs : savedUser.perfil === "gerente" ? managerTabs : allowedUserTabs;
+          const restoredTab = allowedTabs.includes(savedUi.tab)
+            ? savedUi.tab
+            : savedUser.perfil === "usuario" ? "nova-os" : "dashboard";
+          setAuth({ usuario: savedUser.usuario, senha: "", empresaId: savedUser.empresaId || savedUi.empresaId || "", usuarioLogado: savedUser });
+          setTab(restoredTab);
+        }
         setLoaded(true);
         persistSnapshot(initialData).catch((error) => {
           window.alert(`Não foi possível inicializar o Supabase: ${error.message}`);
@@ -410,6 +439,47 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!loaded || !auth.usuarioLogado || tab === "login") return;
+    const savedUi = loadSavedUi();
+    localStorage.setItem(UI_STORAGE_KEY, JSON.stringify({
+      ...savedUi,
+      usuarioId: auth.usuarioLogado.id,
+      empresaId: auth.empresaId || auth.usuarioLogado.empresaId || "",
+      tab,
+    }));
+  }, [loaded, auth.usuarioLogado, auth.empresaId, tab]);
+
+  useEffect(() => {
+    if (!loaded || tab === "login") return;
+    const savedUi = loadSavedUi();
+    const scrollTop = Number(savedUi.scrollByTab?.[tab] || 0);
+    const frame = window.requestAnimationFrame(() => {
+      if (mainRef.current) mainRef.current.scrollTop = scrollTop;
+      window.scrollTo({ top: scrollTop, behavior: "auto" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [loaded, tab]);
+
+  useEffect(() => {
+    if (!loaded || tab === "login") return;
+    const saveWindowScroll = () => {
+      const savedUi = loadSavedUi();
+      const scrollTop = Math.max(window.scrollY, mainRef.current?.scrollTop || 0);
+      localStorage.setItem(UI_STORAGE_KEY, JSON.stringify({
+        ...savedUi,
+        scrollByTab: { ...savedUi.scrollByTab, [tab]: scrollTop },
+      }));
+    };
+    window.addEventListener("scroll", saveWindowScroll, { passive: true });
+    window.addEventListener("beforeunload", saveWindowScroll);
+    return () => {
+      saveWindowScroll();
+      window.removeEventListener("scroll", saveWindowScroll);
+      window.removeEventListener("beforeunload", saveWindowScroll);
+    };
+  }, [loaded, tab]);
+
   const update = (key, updater) => {
     const previous = dbRef.current;
     let next;
@@ -417,12 +487,11 @@ export default function App() {
       next = { ...previous, [key]: updater(previous[key] || []) };
     } else {
       const companyId = auth.empresaId || auth.usuarioLogado?.empresaId || "";
+      if (!companyId) throw new Error("OperaÃ§Ã£o bloqueada: nenhuma empresa estÃ¡ vinculada ao usuÃ¡rio.");
       const items = previous[key] || [];
-      const currentItems = items.filter((item) => !item.empresaId || item.empresaId === companyId);
-      const otherItems = items.filter((item) => item.empresaId && item.empresaId !== companyId);
-      const updatedItems = updater(currentItems).map((item) =>
-        item && typeof item === "object" && !item.empresaId ? { ...item, empresaId: companyId } : item
-      );
+      const currentItems = items.filter((item) => item.empresaId === companyId);
+      const otherItems = items.filter((item) => item.empresaId !== companyId);
+      const updatedItems = updater(currentItems).map((item) => ({ ...item, empresaId: companyId }));
       next = { ...previous, [key]: [...otherItems, ...updatedItems] };
     }
 
@@ -451,8 +520,18 @@ export default function App() {
   };
 
   const sair = () => {
+    localStorage.removeItem(UI_STORAGE_KEY);
     setAuth({ usuario: "", senha: "", empresaId: "", usuarioLogado: null });
     setTab("login");
+  };
+
+  const saveScrollPosition = (event) => {
+    if (tab === "login") return;
+    const savedUi = loadSavedUi();
+    localStorage.setItem(UI_STORAGE_KEY, JSON.stringify({
+      ...savedUi,
+      scrollByTab: { ...savedUi.scrollByTab, [tab]: event.currentTarget.scrollTop },
+    }));
   };
 
   // ---- derived numbers ----
@@ -561,12 +640,12 @@ export default function App() {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 min-w-0 overflow-y-auto">
+      <main ref={mainRef} onScroll={saveScrollPosition} className="flex-1 min-w-0 overflow-y-auto">
         <div className="max-w-7xl mx-auto p-6 md:p-8">
           {tab === "dashboard" && podeAcessar("dashboard") && <Dashboard db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} stats={stats} />}
           {tab === "nova-os" && <NovaOS db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresa={empresaAtiva} ordemEmEdicao={ordemEmEdicao} onFinalizarEdicao={() => setOrdemEmEdicao(null)} podeEditarValor={isMaster || isGerente} />}
           {tab === "ordens" && <Ordens db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresa={empresaAtiva} onEditarNaOS={(ordem) => { setOrdemEmEdicao(ordem); setTab("nova-os"); }} />}
-          {tab === "clientes" && <Clientes db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresaSegmento={empresaAtiva?.segmento || "lava-jato"} />}
+          {tab === "clientes" && <Clientes db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresaId={auth.empresaId || auth.usuarioLogado?.empresaId || ""} empresaSegmento={empresaAtiva?.segmento || "lava-jato"} />}
           {tab === "funcionarios" && podeAcessar("funcionarios") && <FuncionariosScreen db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresaId={auth.empresaId || auth.usuarioLogado?.empresaId || ""} />}
           {tab === "servicos" && podeAcessar("servicos") && <Servicos db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} />}
           {tab === "estoque" && podeAcessar("estoque") && <Estoque db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} />}
@@ -1889,7 +1968,7 @@ function Ordens({ db, update, empresa, onEditarNaOS }) {
 }
 
 // ---------- Clientes ----------
-function Clientes({ db, update, empresaSegmento = "lava-jato" }) {
+function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
   const clienteFormInicial = {
     tipoPessoa: "fisica", nome: "", cpfCnpj: "", dataNascimento: "", email: "", telefone: "",
     cep: "", endereco: "", numero: "", bairro: "", cidade: "", estado: "",
@@ -1905,7 +1984,8 @@ function Clientes({ db, update, empresaSegmento = "lava-jato" }) {
     }
     const proximoCodigo = String(Math.max(0, ...db.clientes.map((cliente) => Number(cliente.codigo) || 0)) + 1).padStart(4, "0");
     try {
-      const cliente = await createCliente({ codigo: proximoCodigo, ...form });
+      if (!empresaId) throw new Error("NÃ£o foi possÃ­vel identificar a empresa deste cliente.");
+      const cliente = await createCliente({ codigo: proximoCodigo, ...form, empresaId });
       update("clientes", (prev) => [...prev, cliente]);
       setForm(clienteFormInicial);
     } catch (error) {
