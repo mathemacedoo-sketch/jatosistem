@@ -15,7 +15,6 @@ import {
   AlertTriangle,
   Plus,
   X,
-  Droplets,
   TrendingUp,
   TrendingDown,
   Search,
@@ -582,11 +581,11 @@ export default function App() {
 
       {/* Sidebar */}
       <aside className="w-64 shrink-0 bg-gradient-to-b from-slate-950 via-[#2f1548] to-[#4c1d95] text-white flex flex-col shadow-[12px_0_40px_-20px_rgba(15,23,42,0.65)]">
-        <div className="px-5 pt-6 pb-4 flex items-center gap-2">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-400 to-violet-600 flex items-center justify-center">
-            <Droplets size={20} className="text-white" />
+        <div className="px-4 pt-5 pb-3">
+          <div className="overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-white/20">
+            <img src="/vermax-logo.png" alt="VERMAX ERP" className="h-auto w-full object-contain" />
           </div>
-          <div>
+          <div className="hidden">
             <div className="headline font-bold text-lg leading-tight">JATO SISTEM</div>
             <div className="text-[11px] text-orange-200 tracking-wide uppercase">Gestão do negócio</div>
           </div>
@@ -663,6 +662,9 @@ function LoginScreen({ auth, setAuth, entrar, db }) {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
       <Card className="w-full max-w-md p-6 space-y-4">
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <img src="/vermax-logo.png" alt="VERMAX ERP" className="h-auto w-full object-contain" />
+        </div>
         <div>
           <h1 className="headline text-2xl font-bold text-slate-900">Acessar sistema</h1>
           <p className="text-sm text-slate-500 mt-1">Entre com o usuário e senha da sua empresa.</p>
