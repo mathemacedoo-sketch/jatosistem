@@ -1235,7 +1235,7 @@ function ReciboFinanceiroModal({ tipo, conta, empresa = {}, onClose }) {
 
 // ---------- Ordens de servico (cadastro + historico) ----------
 function OrdensWorkspace({ db, update, empresa, ordemEmEdicao, setOrdemEmEdicao, podeEditarValor }) {
-  const [modo, setModo] = useState(ordemEmEdicao ? "formulario" : "lista");
+  const [modo, setModo] = useState("formulario");
   const [formKey, setFormKey] = useState(0);
   const ordens = (db.ordens || []).filter((ordem) => !ordem.lancamentoManual);
   const pendentes = ordens.filter((ordem) => ["rascunho", "pendente", "estornado"].includes(ordem.statusOS)).length;
@@ -1452,7 +1452,7 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
   };
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="w-full space-y-6">
       {recibo && <ReciboOSModal ordem={recibo.ordem} empresa={empresa} cliente={recibo.cliente} onClose={() => { setRecibo(null); onConcluirFechado?.(); }} />}
       {!embedded && <header>
         <h1 className="headline text-2xl font-bold text-slate-900">{ordemEmEdicao ? `Continuar OS #${ordemEmEdicao.numero}` : "Nova ordem de serviço"}</h1>
