@@ -418,10 +418,12 @@ export default function App() {
         const savedUser = (initialData.usuarios || []).find((usuario) => usuario.id === savedUi.usuarioId);
         if (savedUser) {
           const allowedUserTabs = ["ordens", "clientes"];
-          const managerTabs = ["dashboard", "ordens", "clientes", "funcionarios", "servicos", "estoque", "receber", "pagar", "usuarios"];
+          const managerTabs = ["dashboard", "ordens", "clientes", "funcionarios", "catalogo", "receber", "pagar", "usuarios"];
           const masterTabs = [...managerTabs, "empresas"];
           const allowedTabs = savedUser.perfil === "master" ? masterTabs : savedUser.perfil === "gerente" ? managerTabs : allowedUserTabs;
-          const savedTab = savedUi.tab === "nova-os" ? "ordens" : savedUi.tab;
+          const savedTab = savedUi.tab === "nova-os"
+            ? "ordens"
+            : ["servicos", "estoque"].includes(savedUi.tab) ? "catalogo" : savedUi.tab;
           const restoredTab = allowedTabs.includes(savedTab)
             ? savedTab
             : savedUser.perfil === "usuario" ? "ordens" : "dashboard";
@@ -487,7 +489,7 @@ export default function App() {
       next = { ...previous, [key]: updater(previous[key] || []) };
     } else {
       const companyId = auth.empresaId || auth.usuarioLogado?.empresaId || "";
-      if (!companyId) throw new Error("OperaÃ§Ã£o bloqueada: nenhuma empresa estÃ¡ vinculada ao usuÃ¡rio.");
+      if (!companyId) throw new Error("Operação bloqueada: nenhuma empresa está vinculada ao usuário.");
       const items = previous[key] || [];
       const currentItems = items.filter((item) => item.empresaId === companyId);
       const otherItems = items.filter((item) => item.empresaId !== companyId);
@@ -558,8 +560,7 @@ export default function App() {
     { id: "ordens", label: "Ordens de Serviço", icon: ClipboardList },
     { id: "clientes", label: "Clientes", icon: Users },
     { id: "funcionarios", label: "Funcionários", icon: UserCog },
-    { id: "servicos", label: "Serviços", icon: Sparkles },
-    { id: "estoque", label: "Estoque", icon: Boxes },
+    { id: "catalogo", label: "Produtos e Servi\u00e7os", icon: Boxes },
     { id: "receber", label: "Contas a Receber", icon: Wallet },
     { id: "pagar", label: "Contas a Pagar", icon: Landmark },
   ].filter((item) => podeAcessar(item.id));
@@ -623,7 +624,7 @@ export default function App() {
               >
                 <Icon size={17} />
                 {n.label}
-                {n.id === "estoque" && stats.estoqueBaixo.length > 0 && (
+                {n.id === "catalogo" && stats.estoqueBaixo.length > 0 && (
                   <span className="ml-auto bg-amber-400 text-[#052e25] text-[10px] font-bold px-1.5 py-0.5 rounded-full">
                     {stats.estoqueBaixo.length}
                   </span>
@@ -645,8 +646,7 @@ export default function App() {
           {tab === "ordens" && <OrdensWorkspace db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresa={empresaAtiva} ordemEmEdicao={ordemEmEdicao} setOrdemEmEdicao={setOrdemEmEdicao} podeEditarValor={isMaster || isGerente} />}
           {tab === "clientes" && <Clientes db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresaId={auth.empresaId || auth.usuarioLogado?.empresaId || ""} empresaSegmento={empresaAtiva?.segmento || "lava-jato"} />}
           {tab === "funcionarios" && podeAcessar("funcionarios") && <FuncionariosScreen db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresaId={auth.empresaId || auth.usuarioLogado?.empresaId || ""} />}
-          {tab === "servicos" && podeAcessar("servicos") && <Servicos db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} />}
-          {tab === "estoque" && podeAcessar("estoque") && <Estoque db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} />}
+          {tab === "catalogo" && podeAcessar("catalogo") && <ProdutosServicos db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} />}
           {tab === "receber" && podeAcessar("receber") && <ContasReceber db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresa={empresaAtiva} />}
           {tab === "pagar" && podeAcessar("pagar") && <ContasPagar db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresa={empresaAtiva} />}
           {tab === "empresas" && isMaster && <EmpresasScreen db={db} update={update} />}
@@ -1305,7 +1305,6 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
   const [buscaCliente, setBuscaCliente] = useState("");
   const [seletorClienteAberto, setSeletorClienteAberto] = useState(false);
   const [itens, setItens] = useState([]);
-  const [tipoSel, setTipoSel] = useState("servico");
   const [itemSel, setItemSel] = useState("");
   const [valorItem, setValorItem] = useState("");
   const [qtd, setQtd] = useState(1);
@@ -1334,7 +1333,10 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
     setFuncionarioId(ordemEmEdicao.funcionarioId || "");
   }, [ordemEmEdicao]);
 
-  const catalogo = tipoSel === "servico" ? db.servicos : db.produtos;
+  const catalogo = [
+    ...(db.servicos || []).map((item) => ({ ...item, tipo: "servico" })),
+    ...(db.produtos || []).map((item) => ({ ...item, tipo: "produto" })),
+  ].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
   const clientesComCodigo = db.clientes.map((cliente, index) => ({ ...cliente, codigoExibicao: cliente.codigo || String(index + 1).padStart(4, "0") }));
   const termoCliente = buscaCliente.trim().toLowerCase().replace(/^#/, "");
   const clientesFiltrados = clientesComCodigo.filter((cliente) =>
@@ -1353,12 +1355,12 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
   const addItem = () => {
     const src = catalogo.find((c) => c.id === itemSel);
     if (!src || qtd <= 0) return;
-    const precoCadastrado = tipoSel === "servico" ? src.preco : (src.precoVenda || src.precoCusto);
+    const precoCadastrado = src.tipo === "servico" ? src.preco : (src.precoVenda || src.precoCusto);
     const preco = valorItem === "" ? Number(precoCadastrado || 0) : Math.max(0, Number(valorItem));
     const quantidade = Number(qtd);
     setItens((prev) => [
       ...prev,
-      { uidLine: uid(), tipo: tipoSel, itemId: src.id, nome: src.nome, descricao: src.nome, qtd: quantidade, precoUnit: preco, subtotal: preco * quantidade },
+      { uidLine: uid(), tipo: src.tipo, itemId: src.id, nome: src.nome, descricao: src.nome, qtd: quantidade, precoUnit: preco, subtotal: preco * quantidade },
     ]);
     setItemSel("");
     setValorItem("");
@@ -1513,25 +1515,19 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
         <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 space-y-3">
           <div className="text-sm font-semibold text-slate-700">Adicionar item</div>
           <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
-            <Field label="Tipo">
-              <select className={inputCls} value={tipoSel} onChange={(e) => { setTipoSel(e.target.value); setItemSel(""); setValorItem(""); }}>
-                <option value="servico">Serviço</option>
-                <option value="produto">Produto</option>
-              </select>
-            </Field>
-            <div className="sm:col-span-2">
-              <Field label={tipoSel === "servico" ? "Serviço" : "Produto"}>
+            <div className="sm:col-span-3">
+              <Field label="Item">
                 <select className={inputCls} value={itemSel} onChange={(e) => {
                   const id = e.target.value;
                   const item = catalogo.find((registro) => registro.id === id);
                   setItemSel(id);
-                  setValorItem(id ? String(tipoSel === "servico" ? item?.preco || 0 : item?.precoVenda || item?.precoCusto || 0) : "");
+                  setValorItem(id ? String(item?.tipo === "servico" ? item?.preco || 0 : item?.precoVenda || item?.precoCusto || 0) : "");
                 }}>
                   <option value="">Selecione...</option>
                   {catalogo.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.nome}
-                      {tipoSel === "produto" ? ` (${c.quantidade} ${c.unidade} em estoque)` : ""}
+                      {c.tipo === "produto" ? ` (${c.quantidade} ${c.unidade} em estoque)` : ""}
                     </option>
                   ))}
                 </select>
@@ -2049,7 +2045,7 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
     }
     const proximoCodigo = String(Math.max(0, ...db.clientes.map((cliente) => Number(cliente.codigo) || 0)) + 1).padStart(4, "0");
     try {
-      if (!empresaId) throw new Error("NÃ£o foi possÃ­vel identificar a empresa deste cliente.");
+      if (!empresaId) throw new Error("Não foi possível identificar a empresa deste cliente.");
       const cliente = await createCliente({ codigo: proximoCodigo, ...form, empresaId });
       update("clientes", (prev) => [...prev, cliente]);
       setForm(clienteFormInicial);
@@ -2155,7 +2151,38 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
 }
 
 // ---------- Serviços (catálogo) ----------
-function Servicos({ db, update }) {
+function ProdutosServicos({ db, update }) {
+  const [tipo, setTipo] = useState("produto");
+
+  return (
+    <div className="space-y-6">
+      <header>
+        <h1 className="headline text-2xl font-bold text-slate-900">{"Produtos e Servi\u00e7os"}</h1>
+        <p className="mt-1 text-sm text-slate-500">{"Cadastre e gerencie todo o cat\u00e1logo usado nas ordens de servi\u00e7o."}</p>
+      </header>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <button type="button" onClick={() => setTipo("produto")} className={`rounded-2xl border p-4 text-left transition ${tipo === "produto" ? "border-emerald-700 bg-emerald-50 shadow-sm ring-1 ring-emerald-700" : "border-slate-200 bg-white hover:border-emerald-300"}`}>
+          <div className="flex items-center gap-3">
+            <span className={`grid h-10 w-10 place-items-center rounded-xl ${tipo === "produto" ? "bg-emerald-800 text-white" : "bg-slate-100 text-slate-500"}`}><Boxes size={20} /></span>
+            <div><div className="font-semibold text-slate-900">Produto</div><div className="text-xs text-slate-500">{db.produtos.length} cadastrado(s) {"\u00b7"} controla estoque e preços</div></div>
+          </div>
+        </button>
+        <button type="button" onClick={() => setTipo("servico")} className={`rounded-2xl border p-4 text-left transition ${tipo === "servico" ? "border-orange-700 bg-orange-50 shadow-sm ring-1 ring-orange-700" : "border-slate-200 bg-white hover:border-orange-300"}`}>
+          <div className="flex items-center gap-3">
+            <span className={`grid h-10 w-10 place-items-center rounded-xl ${tipo === "servico" ? "bg-orange-700 text-white" : "bg-slate-100 text-slate-500"}`}><Sparkles size={20} /></span>
+            <div><div className="font-semibold text-slate-900">{"Servi\u00e7o"}</div><div className="text-xs text-slate-500">{db.servicos.length} cadastrado(s) {"\u00b7"} nome e preço de venda</div></div>
+          </div>
+        </button>
+      </div>
+
+      <div className={tipo === "produto" ? "block" : "hidden"}><Estoque db={db} update={update} embedded /></div>
+      <div className={tipo === "servico" ? "block" : "hidden"}><Servicos db={db} update={update} embedded /></div>
+    </div>
+  );
+}
+
+function Servicos({ db, update, embedded = false }) {
   const [form, setForm] = useState({ nome: "", preco: "" });
   const add = () => {
     if (!form.nome.trim() || form.preco === "") return;
@@ -2167,10 +2194,10 @@ function Servicos({ db, update }) {
 
   return (
     <div className="space-y-6">
-      <header>
+      {!embedded && <header>
         <h1 className="headline text-2xl font-bold text-slate-900">Catálogo de serviços</h1>
         <p className="text-slate-500 text-sm mt-1">Serviços oferecidos e seus preços.</p>
-      </header>
+      </header>}
 
       <Card className="p-5">
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_180px] gap-3">
@@ -2203,7 +2230,7 @@ function Servicos({ db, update }) {
 }
 
 // ---------- Estoque ----------
-function Estoque({ db, update }) {
+function Estoque({ db, update, embedded = false }) {
   const [form, setForm] = useState({ nome: "", unidade: "un", quantidade: "", estoqueMinimo: "", precoCusto: "", precoVenda: "" });
   const [acerto, setAcerto] = useState({ produtoId: db.produtos[0]?.id || "", tipo: "corrigir", valor: "" });
 
@@ -2247,10 +2274,10 @@ function Estoque({ db, update }) {
 
   return (
     <div className="space-y-6">
-      <header>
+      {!embedded && <header>
         <h1 className="headline text-2xl font-bold text-slate-900">Estoque</h1>
         <p className="text-slate-500 text-sm mt-1">Produtos usados ou vendidos no sistema.</p>
-      </header>
+      </header>}
 
       <Card className="p-5">
         <div className="grid grid-cols-1 sm:grid-cols-6 gap-3">
