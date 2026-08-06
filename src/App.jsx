@@ -567,7 +567,7 @@ export default function App() {
   ].filter((item) => podeAcessar(item.id));
 
   if (!loaded) {
-    return <div className="min-h-screen grid place-items-center bg-slate-50 text-sm font-medium text-slate-500">Carregando dados...</div>;
+    return <div className="min-h-screen grid place-items-center bg-slate-50 text-sm font-medium text-slate-500">Carregando MM ERP...</div>;
   }
 
   if (tab === "login") {
@@ -585,11 +585,11 @@ export default function App() {
       <aside className="app-sidebar w-64 shrink-0 text-white flex flex-col">
         <div className="px-4 pt-5 pb-3">
           <div className="brand-panel overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-white/20">
-            <img src="/vermax-logo.png" alt="VERMAX ERP" className="h-auto w-full object-contain" />
+            <img src="/mm-erp-logo.png" alt="MM ERP" className="h-auto w-full object-contain" />
           </div>
           <div className="hidden">
-            <div className="headline font-bold text-lg leading-tight">JATO SISTEM</div>
-            <div className="text-[11px] text-orange-200 tracking-wide uppercase">Gestão do negócio</div>
+            <div className="headline font-bold text-lg leading-tight">MM ERP</div>
+            <div className="text-[11px] text-orange-200 tracking-wide uppercase">MM Tecnologia</div>
           </div>
         </div>
         <svg viewBox="0 0 256 12" className="w-full" preserveAspectRatio="none" style={{ height: 10 }}>
@@ -635,8 +635,9 @@ export default function App() {
           })}
         </nav>
         <div className="px-5 py-4 text-[11px] text-slate-400 border-t border-white/10">
-          <div className="mb-2">{empresaAtiva?.nome || "Empresa"}</div>
-          <button onClick={sair} className="text-orange-200 hover:text-white">Sair</button>
+          <div className="mb-1 font-medium text-slate-200">{empresaAtiva?.nome || "Empresa"}</div>
+          <div className="mb-3 text-[10px] uppercase tracking-[0.14em] text-slate-400">MM ERP · MM Tecnologia</div>
+          <button onClick={sair} className="text-orange-200 hover:text-white">Sair do sistema</button>
         </div>
       </aside>
 
@@ -664,14 +665,15 @@ function LoginScreen({ auth, setAuth, entrar, db }) {
     <div className="login-shell min-h-screen flex items-center justify-center p-6">
       <Card className="w-full max-w-md p-6 space-y-4">
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-          <img src="/vermax-logo.png" alt="VERMAX ERP" className="h-auto w-full object-contain" />
+          <img src="/mm-erp-logo.png" alt="MM ERP" className="mx-auto h-auto max-h-64 w-auto object-contain" />
         </div>
         <div>
-          <h1 className="headline text-2xl font-bold text-slate-900">Acessar sistema</h1>
-          <p className="text-sm text-slate-500 mt-1">Entre com o usuário e senha da sua empresa.</p>
+          <div className="mb-1 text-xs font-bold uppercase tracking-[0.18em] text-orange-700">MM Tecnologia</div>
+          <h1 className="headline text-2xl font-bold text-slate-900">Acessar o MM ERP</h1>
+          <p className="text-sm text-slate-500 mt-1">Gestão empresarial simples, segura e inteligente.</p>
         </div>
         <div className="rounded-xl bg-orange-50 border border-orange-200 p-3 text-sm text-orange-700">
-          Use as credenciais cadastradas para a empresa em que você foi cadastrado.
+          Use as credenciais fornecidas pela sua empresa para acessar o sistema.
         </div>
         <Field label="Usuário">
           <input className={inputCls} value={auth.usuario} onChange={(e) => setAuth((prev) => ({ ...prev, usuario: e.target.value }))} />
@@ -680,7 +682,8 @@ function LoginScreen({ auth, setAuth, entrar, db }) {
           <input type="password" className={inputCls} value={auth.senha} onChange={(e) => setAuth((prev) => ({ ...prev, senha: e.target.value }))} />
         </Field>
         {erro && <div className="text-sm text-red-600">{erro}</div>}
-        <button onClick={() => { const user = (db.usuarios || []).find((u) => u.usuario === auth.usuario && u.senha === auth.senha); if (!user) { setErro("Usuário ou senha inválidos."); return; } setErro(""); entrar(); }} className="w-full rounded-xl bg-gradient-to-br from-orange-700 to-emerald-800 text-white font-semibold py-2.5">Entrar</button>
+        <button onClick={() => { const user = (db.usuarios || []).find((u) => u.usuario === auth.usuario && u.senha === auth.senha); if (!user) { setErro("Usuário ou senha inválidos."); return; } setErro(""); entrar(); }} className="w-full rounded-xl bg-gradient-to-br from-orange-700 to-emerald-800 text-white font-semibold py-2.5">Entrar no MM ERP</button>
+        <p className="text-center text-[11px] text-slate-400">Desenvolvido e mantido por <strong className="font-semibold text-slate-500">MM Tecnologia</strong></p>
       </Card>
     </div>
   );
