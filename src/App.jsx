@@ -310,11 +310,11 @@ function Field({ label, children }) {
   );
 }
 const inputCls =
-  "w-full rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm text-slate-700 shadow-sm placeholder:text-slate-400 transition focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-700";
+  "app-input w-full rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm text-slate-700 shadow-sm placeholder:text-slate-400 transition focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-700";
 
 function Card({ children, className = "" }) {
   return (
-    <div className={`rounded-2xl border border-slate-200/80 bg-white/90 shadow-[0_16px_40px_-24px_rgba(15,23,42,0.45)] backdrop-blur-sm ${className}`}>
+    <div className={`app-card rounded-2xl border border-slate-200/80 bg-white/90 shadow-[0_16px_40px_-24px_rgba(15,23,42,0.45)] backdrop-blur-sm ${className}`}>
       {children}
     </div>
   );
@@ -575,16 +575,16 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen w-full bg-[radial-gradient(circle_at_top_left,_rgba(180,83,9,0.12),_transparent_35%),linear-gradient(135deg,_#f8fafc_0%,_#ecfdf5_100%)] text-slate-800 flex" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
+    <div className="app-shell min-h-screen w-full text-slate-800 flex" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
         .headline { font-family: 'Space Grotesk', system-ui, sans-serif; }
       `}</style>
 
       {/* Sidebar */}
-      <aside className="w-64 shrink-0 bg-gradient-to-b from-[#032e25] via-[#064e3b] to-[#0b614c] text-white flex flex-col shadow-[12px_0_40px_-20px_rgba(3,46,37,0.65)]">
+      <aside className="app-sidebar w-64 shrink-0 text-white flex flex-col">
         <div className="px-4 pt-5 pb-3">
-          <div className="overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-white/20">
+          <div className="brand-panel overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-white/20">
             <img src="/vermax-logo.png" alt="VERMAX ERP" className="h-auto w-full object-contain" />
           </div>
           <div className="hidden">
@@ -596,8 +596,8 @@ export default function App() {
           <path d="M0,6 C40,0 80,12 120,6 C160,0 200,12 256,6 L256,12 L0,12 Z" fill="url(#wave)" />
           <defs>
             <linearGradient id="wave" x1="0" x2="1">
-              <stop offset="0%" stopColor="#c2410c" />
-              <stop offset="100%" stopColor="#065f46" />
+              <stop offset="0%" stopColor="#22d3ee" />
+              <stop offset="100%" stopColor="#0e7490" />
             </linearGradient>
           </defs>
         </svg>
@@ -641,7 +641,7 @@ export default function App() {
       </aside>
 
       {/* Main */}
-      <main ref={mainRef} onScroll={saveScrollPosition} className="flex-1 min-w-0 overflow-y-auto">
+      <main ref={mainRef} onScroll={saveScrollPosition} className="app-main flex-1 min-w-0 overflow-y-auto">
         <div className="max-w-7xl mx-auto p-6 md:p-8">
           {tab === "dashboard" && podeAcessar("dashboard") && <Dashboard db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} stats={stats} />}
           {tab === "ordens" && <OrdensWorkspace db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresa={empresaAtiva} ordemEmEdicao={ordemEmEdicao} setOrdemEmEdicao={setOrdemEmEdicao} podeEditarValor={isMaster || isGerente} />}
@@ -661,7 +661,7 @@ export default function App() {
 function LoginScreen({ auth, setAuth, entrar, db }) {
   const [erro, setErro] = useState("");
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[radial-gradient(circle_at_top_left,_rgba(180,83,9,0.14),_transparent_35%),linear-gradient(135deg,_#f8fafc_0%,_#ecfdf5_100%)] p-6">
+    <div className="login-shell min-h-screen flex items-center justify-center p-6">
       <Card className="w-full max-w-md p-6 space-y-4">
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
           <img src="/vermax-logo.png" alt="VERMAX ERP" className="h-auto w-full object-contain" />
