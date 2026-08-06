@@ -1,15 +1,14 @@
 import { supabase } from "./supabase";
+import { sanitizeRecord } from "./security";
 
 const COLLECTIONS = [
-  "empresas",
-  "usuarios",
   "funcionarios",
   "servicos",
   "produtos",
   "ordens",
   "contasPagar",
 ];
-const TENANT_COLLECTIONS = COLLECTIONS.filter((collection) => collection !== "empresas");
+const TENANT_COLLECTIONS = COLLECTIONS;
 
 const assertTenantIntegrity = (database) => {
   for (const collection of TENANT_COLLECTIONS) {
@@ -77,76 +76,29 @@ const throwIfError = (result, operation) => {
 };
 
 export async function loadDatabase(seed) {
-  const [clientesResult, recordsResult] = await Promise.all([
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData.user) throw new Error("Sessão autenticada obrigatória.");
+  const [clientesResult, recordsResult, empresasResult, perfisResult] = await Promise.all([
     supabase.from("clientes").select("*").is("dt_exc", null).order("id", { ascending: true }),
     supabase.from("sistema_registros").select("modulo, registro_id, empresa_id, dados").is("dt_exc", null),
+    supabase.from("empresas").select("id, nome, segmento, dados, ativo").eq("ativo", true),
+    supabase.from("perfis").select("id, empresa_id, nome, perfil, ativo").eq("ativo", true),
   ]);
 
   const clientes = throwIfError(clientesResult, "Erro ao carregar clientes").map(clienteFromRow);
   const records = throwIfError(recordsResult, "Erro ao carregar dados do sistema");
-  let masterPadrao = records.find(
-    (row) => row.modulo === "usuarios" && row.registro_id === "usuario-admin"
-  );
-
-  if (!masterPadrao) {
-    let empresaPadrao = records.find(
-      (row) => row.modulo === "empresas" && row.dados?.nome === "ADM"
-    ) || records.find((row) => row.modulo === "empresas");
-
-    if (!empresaPadrao) {
-      const empresa = seed.empresas[0];
-      empresaPadrao = {
-        modulo: "empresas",
-        registro_id: String(empresa.id),
-        empresa_id: null,
-        dados: empresa,
-        dt_exc: null,
-      };
-      throwIfError(
-        await supabase
-          .from("sistema_registros")
-          .upsert(empresaPadrao, { onConflict: "modulo,registro_id" }),
-        "Erro ao restaurar empresa administrativa"
-      );
-      records.push(empresaPadrao);
-    }
-
-    const usuario = {
-      ...seed.usuarios[0],
-      empresaId: empresaPadrao.registro_id,
-      usuario: "admin",
-      senha: "admin",
-      perfil: "master",
-    };
-    masterPadrao = {
-      modulo: "usuarios",
-      registro_id: String(usuario.id),
-      empresa_id: empresaPadrao.registro_id,
-      dados: usuario,
-      dt_exc: null,
-    };
-    throwIfError(
-      await supabase
-        .from("sistema_registros")
-        .upsert(masterPadrao, { onConflict: "modulo,registro_id" }),
-      "Erro ao restaurar usuário master"
-    );
-    records.push(masterPadrao);
-  } else if (masterPadrao.dados?.senha !== "admin") {
-    masterPadrao.dados = { ...masterPadrao.dados, senha: "admin" };
-    throwIfError(
-      await supabase
-        .from("sistema_registros")
-        .update({ dados: masterPadrao.dados })
-        .eq("modulo", "usuarios")
-        .eq("registro_id", masterPadrao.registro_id),
-      "Erro ao atualizar senha do usuário master"
-    );
-  }
-  const initialized = records.some((row) => row.modulo === "__meta__");
+  const empresas = throwIfError(empresasResult, "Erro ao carregar empresas").map((row) => ({
+    ...(row.dados || {}), id: row.id, nome: row.nome, segmento: row.segmento, status: row.ativo ? "ativo" : "inativo",
+  }));
+  const usuarios = throwIfError(perfisResult, "Erro ao carregar perfis").map((row) => ({
+    id: row.id, empresaId: row.empresa_id, nome: row.nome, perfil: row.perfil, usuario: "Conta protegida",
+  }));
+  const initialized = true;
   const loaded = {
     ...seed,
     clientes,
+    empresas,
+    usuarios,
   };
 
   COLLECTIONS.forEach((collection) => {
@@ -176,17 +128,19 @@ export async function createCliente(cliente) {
 const equal = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 
 export async function syncDatabase(previous, current) {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData.user) throw new Error("Sessão expirada. Entre novamente.");
+  current = sanitizeRecord(current);
   assertTenantIntegrity(current);
-  throwIfError(
-    await supabase.from("sistema_registros").upsert({
-      modulo: "__meta__",
-      registro_id: "database",
-      empresa_id: null,
-      dados: { initialized: true, version: 1 },
-    }, { onConflict: "modulo,registro_id" }),
-    "Erro ao inicializar banco"
-  );
 
+  const empresasAnteriores = new Map((previous.empresas || []).map((item) => [String(item.id), item]));
+  const empresasAtuais = new Map((current.empresas || []).map((item) => [String(item.id), item]));
+  const empresasAlteradas = [...empresasAtuais.values()].filter((item) => !equal(empresasAnteriores.get(String(item.id)), item));
+  if (empresasAlteradas.length) {
+    throwIfError(await supabase.from("empresas").upsert(empresasAlteradas.map((item) => ({
+      id: String(item.id), nome: item.nome, segmento: item.segmento || "lava-jato", dados: item, ativo: item.status !== "inativo",
+    })), { onConflict: "id" }), "Erro ao salvar empresas");
+  }
   const previousClientes = new Map((previous.clientes || []).map((item) => [String(item.id), item]));
   const currentClientes = new Map((current.clientes || []).map((item) => [String(item.id), item]));
   const clientesChanged = [...currentClientes.values()].filter((item) => !equal(previousClientes.get(String(item.id)), item));

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createCliente, loadDatabase, syncDatabase } from "./lib/database";
+import { getAuthenticatedProfile, manageUser, signIn, signOut } from "./lib/auth";
 
 import {
   LayoutDashboard,
@@ -41,7 +42,6 @@ const fmtDate = (d) => {
   return `${day}/${m}/${y}`;
 };
 const monthKey = (d) => (d || "").slice(0, 7);
-const DEFAULT_ADMIN_PASSWORD = "admin";
 
 const onlyDigits = (value = "") => value.replace(/\D/g, "");
 const formatCpfCnpj = (value = "") => {
@@ -172,15 +172,6 @@ const createEmpresa = ({ nome, segmento = "lava-jato", ...dadosCadastrais }) => 
   criadoEm: todayISO(),
 });
 
-const createUsuario = ({ nome, usuario, senha, empresaId, perfil = "usuario" }) => ({
-  id: uid(),
-  nome: nome.trim(),
-  usuario: usuario.trim(),
-  senha,
-  empresaId,
-  perfil,
-});
-
 const createFuncionario = ({ nome, cargo = "Funcionário", empresaId }) => ({
   id: uid(),
   nome: nome.trim(),
@@ -268,7 +259,7 @@ const SEED = {
     { id: empresaAdmId, nome: "ADM", segmento: "lava-jato", status: "ativo", criadoEm: todayISO() },
   ],
   usuarios: [
-    { id: usuarioAdmId, nome: "Administrador", usuario: "admin", senha: DEFAULT_ADMIN_PASSWORD, empresaId: empresaAdmId, perfil: "master" },
+    { id: usuarioAdmId, nome: "Administrador", usuario: "", empresaId: empresaAdmId, perfil: "master" },
   ],
   clientes: [
     { id: uid(), nome: "Consumidor", telefone: "", veiculo: "", placa: "", empresaId: empresaAdmId },
@@ -289,7 +280,6 @@ const SEED = {
   contasPagar: [],
 };
 
-const STORAGE_KEY = "jato_sistem_db_v1";
 const UI_STORAGE_KEY = "jato_sistem_ui_v1";
 
 const loadSavedUi = () => {
@@ -360,7 +350,6 @@ export default function App() {
       .then(async () => {
         await syncDatabase(lastSynced.current, snapshot);
         lastSynced.current = snapshot;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
       });
     syncQueue.current = task.catch((error) => {
       console.error("Erro ao sincronizar dados com o Supabase:", error);
@@ -378,21 +367,13 @@ export default function App() {
         initialData = loadedDatabase.database;
         remoteInitialized = loadedDatabase.initialized;
       } catch (error) {
-        console.error("Erro ao carregar o Supabase; usando cópia local:", error);
-        const localData = localStorage.getItem(STORAGE_KEY);
-        if (localData) initialData = { ...SEED, ...JSON.parse(localData) };
+        console.error("Erro ao carregar dados autenticados:", error);
+        initialData = { empresas: [], usuarios: [], clientes: [], funcionarios: [], servicos: [], produtos: [], ordens: [], contasPagar: [] };
       } finally {
         initialData = {
           ...initialData,
-          empresas: (initialData.empresas || []).length ? initialData.empresas : SEED.empresas,
-          usuarios: (() => {
-            const usuarios = initialData.usuarios || [];
-            const master = usuarios.find((usuario) => usuario.usuario === "admin" && usuario.perfil === "master");
-            if (master) {
-              return usuarios.map((usuario) => usuario.id === master.id ? { ...usuario, senha: "admin" } : usuario);
-            }
-            return [...usuarios, SEED.usuarios[0]];
-          })(),
+          empresas: initialData.empresas || [],
+          usuarios: initialData.usuarios || [],
           clientes: (initialData.clientes || []).map((cliente) => cliente.nome === "Cliente Avulso" ? { ...cliente, nome: "Consumidor" } : cliente),
           ordens: (initialData.ordens || []).map((ordem) => ordem.clienteNome === "Cliente Avulso" ? { ...ordem, clienteNome: "Consumidor" } : ordem),
         };
@@ -416,8 +397,11 @@ export default function App() {
         dbRef.current = initialData;
         setDb(initialData);
         const savedUi = loadSavedUi();
-        const savedUser = (initialData.usuarios || []).find((usuario) => usuario.id === savedUi.usuarioId);
+        const savedUser = await getAuthenticatedProfile().catch(() => null);
         if (savedUser) {
+          initialData.usuarios = [savedUser, ...(initialData.usuarios || []).filter((usuario) => usuario.id !== savedUser.id)];
+          dbRef.current = initialData;
+          setDb(initialData);
           const allowedUserTabs = ["ordens", "clientes"];
           const managerTabs = ["dashboard", "ordens", "clientes", "funcionarios", "catalogo", "receber", "pagar", "usuarios"];
           const masterTabs = [...managerTabs, "empresas"];
@@ -432,9 +416,6 @@ export default function App() {
           setTab(restoredTab);
         }
         setLoaded(true);
-        persistSnapshot(initialData).catch((error) => {
-          window.alert(`Não foi possível inicializar o Supabase: ${error.message}`);
-        });
       }
     })();
     return () => {
@@ -507,22 +488,20 @@ export default function App() {
   const empresas = db.empresas || [];
   const usuarios = db.usuarios || [];
   const empresaAtiva = empresas.find((empresa) => empresa.id === (auth.empresaId || auth.usuarioLogado?.empresaId)) || null;
-  const authUser = auth.usuarioLogado || usuarios.find((u) => u.usuario === auth.usuario && u.senha === auth.senha);
+  const authUser = auth.usuarioLogado;
   const isMaster = authUser?.perfil === "master";
   const isGerente = authUser?.perfil === "gerente";
   const podeGerenciarUsuarios = isMaster || isGerente;
   const tabsUsuario = ["ordens", "clientes"];
   const podeAcessar = (tabId) => isMaster || isGerente || tabsUsuario.includes(tabId);
 
-  const entrar = () => {
-    const user = usuarios.find((u) => u.usuario === auth.usuario && u.senha === auth.senha);
-    if (!user) return;
-    const empresaId = user.empresaId || (auth.empresaId || empresas[0]?.id || "");
-    setAuth((prev) => ({ ...prev, empresaId, usuarioLogado: user }));
-    setTab(user.perfil === "usuario" ? "ordens" : "dashboard");
+  const entrar = async () => {
+    await signIn(auth.usuario, auth.senha);
+    window.location.reload();
   };
 
-  const sair = () => {
+  const sair = async () => {
+    await signOut();
     localStorage.removeItem(UI_STORAGE_KEY);
     setAuth({ usuario: "", senha: "", empresaId: "", usuarioLogado: null });
     setTab("login");
@@ -659,7 +638,7 @@ export default function App() {
   );
 }
 
-function LoginScreen({ auth, setAuth, entrar, db }) {
+function LoginScreen({ auth, setAuth, entrar }) {
   const [erro, setErro] = useState("");
   return (
     <div className="login-shell min-h-screen flex items-center justify-center p-6">
@@ -675,14 +654,14 @@ function LoginScreen({ auth, setAuth, entrar, db }) {
         <div className="rounded-xl bg-orange-50 border border-orange-200 p-3 text-sm text-orange-700">
           Use as credenciais fornecidas pela sua empresa para acessar o sistema.
         </div>
-        <Field label="Usuário">
-          <input className={inputCls} value={auth.usuario} onChange={(e) => setAuth((prev) => ({ ...prev, usuario: e.target.value }))} />
+        <Field label="E-mail">
+          <input type="email" autoComplete="username" className={inputCls} value={auth.usuario} onChange={(e) => setAuth((prev) => ({ ...prev, usuario: e.target.value }))} />
         </Field>
         <Field label="Senha">
-          <input type="password" className={inputCls} value={auth.senha} onChange={(e) => setAuth((prev) => ({ ...prev, senha: e.target.value }))} />
+          <input type="password" autoComplete="current-password" className={inputCls} value={auth.senha} onChange={(e) => setAuth((prev) => ({ ...prev, senha: e.target.value }))} />
         </Field>
         {erro && <div className="text-sm text-red-600">{erro}</div>}
-        <button onClick={() => { const user = (db.usuarios || []).find((u) => u.usuario === auth.usuario && u.senha === auth.senha); if (!user) { setErro("Usuário ou senha inválidos."); return; } setErro(""); entrar(); }} className="w-full rounded-xl bg-gradient-to-br from-orange-700 to-emerald-800 text-white font-semibold py-2.5">Entrar no MM ERP</button>
+        <button onClick={async () => { try { setErro(""); await entrar(); } catch (error) { setErro(error.message); } }} className="w-full rounded-xl bg-gradient-to-br from-orange-700 to-emerald-800 text-white font-semibold py-2.5">Entrar no MM ERP</button>
         <p className="text-center text-[11px] text-slate-400">Desenvolvido e mantido por <strong className="font-semibold text-slate-500">MM Tecnologia</strong></p>
       </Card>
     </div>
@@ -836,8 +815,8 @@ function UsuariosScreen({ db, update, isMaster, empresaId }) {
   }, [empresaSelecionada, empresaSelecionadaValida]);
 
   const add = async () => {
-    if (!form.nome.trim() || !form.usuario.trim() || !form.senha.trim()) {
-      setErroSalvar("Preencha nome, usuário e senha.");
+    if (!form.nome.trim() || (!editandoId && (!form.usuario.trim() || !form.senha.trim()))) {
+      setErroSalvar("Preencha nome, e-mail e senha.");
       return;
     }
     const usuarioDuplicado = (db.usuarios || []).some(
@@ -854,18 +833,12 @@ function UsuariosScreen({ db, update, isMaster, empresaId }) {
     setErroSalvar("");
     try {
       if (editandoId) {
-        await update("usuarios", (prev) => prev.map((usuario) => usuario.id === editandoId ? { ...usuario, nome: form.nome, usuario: form.usuario, senha: form.senha, perfil: form.perfil, empresaId: targetEmpresaId } : usuario));
+        await manageUser({ action: "update", id: editandoId, nome: form.nome, perfil: form.perfil, empresaId: targetEmpresaId });
         setEditandoId(null);
       } else {
-        await update("usuarios", (prev) => [...prev, createUsuario({
-          nome: form.nome,
-          usuario: form.usuario,
-          senha: form.senha,
-          empresaId: targetEmpresaId,
-          perfil: form.perfil,
-        })]);
+        await manageUser({ action: "create", nome: form.nome, email: form.usuario, password: form.senha, empresaId: targetEmpresaId, perfil: form.perfil });
       }
-      setForm({ nome: "", usuario: "", senha: "", perfil: "usuario", empresaId: targetEmpresaId });
+      window.location.reload();
     } catch (error) {
       setErroSalvar(error.message);
     } finally {
@@ -875,12 +848,18 @@ function UsuariosScreen({ db, update, isMaster, empresaId }) {
 
   const editarUsuario = (usuario) => {
     setEditandoId(usuario.id);
-    setForm({ nome: usuario.nome, usuario: usuario.usuario, senha: usuario.senha, perfil: usuario.perfil || "usuario", empresaId: usuario.empresaId });
+    setForm({ nome: usuario.nome, usuario: "", senha: "", perfil: usuario.perfil || "usuario", empresaId: usuario.empresaId });
   };
 
-  const removerUsuario = (usuario) => {
+  const removerUsuario = async (usuario) => {
     if (!window.confirm(`Deseja excluir o usuário ${usuario.nome}?`)) return;
-    update("usuarios", (prev) => prev.filter((item) => item.id !== usuario.id));
+    try {
+      await manageUser({ action: "delete", id: usuario.id });
+      window.location.reload();
+    } catch (error) {
+      setErroSalvar(error.message);
+      return;
+    }
     if (editandoId === usuario.id) {
       setEditandoId(null);
       setForm({ nome: "", usuario: "", senha: "", perfil: "usuario", empresaId });
@@ -912,12 +891,8 @@ function UsuariosScreen({ db, update, isMaster, empresaId }) {
         <Field label="Nome">
           <input className={inputCls} value={form.nome} onChange={(e) => setForm((prev) => ({ ...prev, nome: e.target.value }))} />
         </Field>
-        <Field label="Usuário">
-          <input className={inputCls} value={form.usuario} onChange={(e) => setForm((prev) => ({ ...prev, usuario: e.target.value }))} />
-        </Field>
-        <Field label="Senha">
-          <input type="password" className={inputCls} value={form.senha} onChange={(e) => setForm((prev) => ({ ...prev, senha: e.target.value }))} />
-        </Field>
+        {!editandoId && <Field label="E-mail"><input type="email" autoComplete="off" className={inputCls} value={form.usuario} onChange={(e) => setForm((prev) => ({ ...prev, usuario: e.target.value }))} /></Field>}
+        {!editandoId && <Field label="Senha temporária (mín. 12 caracteres)"><input type="password" autoComplete="new-password" className={inputCls} value={form.senha} onChange={(e) => setForm((prev) => ({ ...prev, senha: e.target.value }))} /></Field>}
         <Field label="Perfil">
           <select className={inputCls} value={form.perfil} onChange={(e) => setForm((prev) => ({ ...prev, perfil: e.target.value }))}>
             <option value="usuario">Usuário</option>
