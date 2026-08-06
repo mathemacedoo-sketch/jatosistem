@@ -57,6 +57,8 @@ button:disabled { cursor: not-allowed; }
 button:focus-visible { outline: 2px solid #ef4444; outline-offset: 2px; }
 .brand-panel { box-shadow: 0 14px 35px -20px rgb(239 68 68 / 55%); }
 .brand-panel img { display: block; }
+.company-identity { box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%); }
+.company-name { letter-spacing: -0.01em; }
 .app-main { min-height: 100vh; }
 
 .app-card {
@@ -109,8 +111,12 @@ thead th { letter-spacing: .055em; font-weight: 700; }
     overflow-y: auto;
     box-shadow: 0 12px 30px -22px rgb(69 10 10 / 85%);
   }
-  .app-sidebar > div:first-child { padding: .65rem 1rem .4rem; }
-  .app-sidebar .brand-panel { width: 9rem; margin: 0 auto; }
+  .app-sidebar > div:first-child { padding: .65rem .75rem .4rem; }
+  .sidebar-identity { display: grid; grid-template-columns: 6rem minmax(0, 1fr); align-items: center; gap: .75rem; }
+  .app-sidebar .brand-panel { width: 6rem; margin: 0; }
+  .app-sidebar .brand-panel img { height: 5.6rem; }
+  .app-sidebar .company-identity { margin-top: 0; padding: .5rem .65rem; }
+  .app-sidebar .company-address { display: none; }
   .app-sidebar svg { display: none; }
   .app-sidebar nav {
     display: flex;

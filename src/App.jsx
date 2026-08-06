@@ -507,6 +507,13 @@ export default function App() {
   const empresas = db.empresas || [];
   const usuarios = db.usuarios || [];
   const empresaAtiva = empresas.find((empresa) => empresa.id === (auth.empresaId || auth.usuarioLogado?.empresaId)) || null;
+  const enderecoEmpresaAtiva = empresaAtiva
+    ? [
+        [empresaAtiva.endereco, empresaAtiva.numero].filter(Boolean).join(", "),
+        empresaAtiva.bairro,
+        [empresaAtiva.cidade, empresaAtiva.estado].filter(Boolean).join(" - "),
+      ].filter(Boolean).join(" · ")
+    : "";
   const authUser = auth.usuarioLogado || usuarios.find((u) => u.usuario === auth.usuario && u.senha === auth.senha);
   const isMaster = authUser?.perfil === "master";
   const isGerente = authUser?.perfil === "gerente";
@@ -583,10 +590,26 @@ export default function App() {
 
       {/* Sidebar */}
       <aside className="app-sidebar w-64 shrink-0 text-white flex flex-col">
-        <div className="px-4 pt-5 pb-3">
+        <div className="sidebar-identity px-4 pt-4 pb-3">
           <div className="brand-panel overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-white/20">
-            <img src="/mm-erp-logo.png" alt="MM ERP" className="h-auto w-full object-contain" />
+            <img src="/mm-erp-logo.png" alt="MM ERP" className="mx-auto h-[104px] w-auto object-contain" />
           </div>
+          <section className="company-identity mt-3 rounded-xl border border-white/10 bg-black/10 px-3 py-2.5" aria-label="Empresa conectada">
+            <div className="mb-1 flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.16em] text-orange-200">
+              <Building2 size={11} aria-hidden="true" /> Empresa conectada
+            </div>
+            <div className="company-name truncate text-[13px] font-semibold leading-tight text-white" title={empresaAtiva?.nome || "Empresa não identificada"}>
+              {empresaAtiva?.nome || "Empresa não identificada"}
+            </div>
+            <div className="mt-1.5 space-y-0.5 text-[10px] leading-[1.35] text-slate-300">
+              {empresaAtiva?.cnpj && <div title={`CNPJ ${empresaAtiva.cnpj}`}>CNPJ {empresaAtiva.cnpj}</div>}
+              {enderecoEmpresaAtiva && <div className="company-address line-clamp-2" title={enderecoEmpresaAtiva}>{enderecoEmpresaAtiva}</div>}
+              {empresaAtiva?.telefone && <div title={`Telefone ${empresaAtiva.telefone}`}>Tel. {empresaAtiva.telefone}</div>}
+              {!empresaAtiva?.cnpj && !enderecoEmpresaAtiva && !empresaAtiva?.telefone && (
+                <div className="italic text-slate-400">Dados cadastrais não informados</div>
+              )}
+            </div>
+          </section>
           <div className="hidden">
             <div className="headline font-bold text-lg leading-tight">MM ERP</div>
             <div className="text-[11px] text-orange-200 tracking-wide uppercase">MM Tecnologia</div>
@@ -635,7 +658,7 @@ export default function App() {
           })}
         </nav>
         <div className="px-5 py-4 text-[11px] text-slate-400 border-t border-white/10">
-          <div className="mb-1 font-medium text-slate-200">{empresaAtiva?.nome || "Empresa"}</div>
+          <div className="mb-1 font-medium text-slate-200">{authUser?.nome || "Usuário"}</div>
           <div className="mb-3 text-[10px] uppercase tracking-[0.14em] text-slate-400">MM ERP · MM Tecnologia</div>
           <button onClick={sair} className="text-orange-200 hover:text-white">Sair do sistema</button>
         </div>
