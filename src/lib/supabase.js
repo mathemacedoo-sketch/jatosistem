@@ -7,12 +7,4 @@ if (!supabaseUrl || !supabaseKey) {
   throw new Error("Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no arquivo .env.local.");
 }
 
-export const supabase = createClient(supabaseUrl, supabaseKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-    storageKey: "mm-erp-auth",
-  },
-  global: { headers: { "X-Client-Info": "mm-erp-web" } },
-});
+export const supabase = createClient(supabaseUrl, supabaseKey);
