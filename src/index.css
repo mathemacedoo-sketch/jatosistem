@@ -1,26 +1,26 @@
 @import "tailwindcss";
 
 @theme {
-  --color-orange-50: #ecfeff;
-  --color-orange-100: #cffafe;
-  --color-orange-200: #a5f3fc;
-  --color-orange-300: #67e8f9;
-  --color-orange-400: #22d3ee;
-  --color-orange-500: #06b6d4;
-  --color-orange-600: #0891b2;
-  --color-orange-700: #0e7490;
-  --color-orange-800: #155e75;
-  --color-orange-900: #164e63;
-  --color-emerald-50: #f0f9ff;
-  --color-emerald-100: #e0f2fe;
-  --color-emerald-200: #bae6fd;
-  --color-emerald-300: #7dd3fc;
-  --color-emerald-400: #38bdf8;
-  --color-emerald-500: #0ea5e9;
-  --color-emerald-600: #0284c7;
-  --color-emerald-700: #0369a1;
-  --color-emerald-800: #075985;
-  --color-emerald-900: #0c4a6e;
+  --color-orange-50: #fff1f2;
+  --color-orange-100: #ffe4e6;
+  --color-orange-200: #fecdd3;
+  --color-orange-300: #fda4af;
+  --color-orange-400: #fb7185;
+  --color-orange-500: #f43f5e;
+  --color-orange-600: #e11d48;
+  --color-orange-700: #be123c;
+  --color-orange-800: #9f1239;
+  --color-orange-900: #881337;
+  --color-emerald-50: #fef2f2;
+  --color-emerald-100: #fee2e2;
+  --color-emerald-200: #fecaca;
+  --color-emerald-300: #fca5a5;
+  --color-emerald-400: #f87171;
+  --color-emerald-500: #ef4444;
+  --color-emerald-600: #dc2626;
+  --color-emerald-700: #b91c1c;
+  --color-emerald-800: #991b1b;
+  --color-emerald-900: #7f1d1d;
 }
 
 :root {
@@ -36,26 +36,26 @@ body { margin: 0; min-width: 320px; min-height: 100vh; }
 button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; }
-::selection { background: #a5f3fc; color: #082f49; }
+::selection { background: #fecaca; color: #7f1d1d; }
 
 .app-shell {
   background:
-    radial-gradient(circle at 88% -10%, rgb(34 211 238 / 10%), transparent 28rem),
-    linear-gradient(145deg, #f8fafc 0%, #f2f7fb 52%, #eef6fa 100%);
+    radial-gradient(circle at 88% -10%, rgb(239 68 68 / 8%), transparent 28rem),
+    linear-gradient(145deg, #ffffff 0%, #f8fafc 52%, #f1f5f9 100%);
 }
 
 .app-sidebar {
   position: relative;
   z-index: 10;
-  background: linear-gradient(180deg, #071b34 0%, #092844 54%, #073752 100%);
+  background: linear-gradient(180deg, #3f0b0b 0%, #681414 54%, #8f1d1d 100%);
   border-right: 1px solid rgb(255 255 255 / 8%);
-  box-shadow: 16px 0 50px -30px rgb(2 20 40 / 70%);
+  box-shadow: 16px 0 50px -30px rgb(69 10 10 / 70%);
 }
 
 .app-sidebar nav button { letter-spacing: -0.01em; }
 .app-sidebar nav button:focus-visible,
-button:focus-visible { outline: 2px solid #22d3ee; outline-offset: 2px; }
-.brand-panel { box-shadow: 0 14px 35px -20px rgb(34 211 238 / 55%); }
+button:focus-visible { outline: 2px solid #ef4444; outline-offset: 2px; }
+.brand-panel { box-shadow: 0 14px 35px -20px rgb(239 68 68 / 55%); }
 .app-main { min-height: 100vh; }
 
 .app-card {
@@ -69,27 +69,27 @@ button:focus-visible { outline: 2px solid #22d3ee; outline-offset: 2px; }
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 80%);
 }
 .app-input:hover { border-color: #94a3b8; }
-.app-input:focus { background: #fff; box-shadow: 0 0 0 3px rgb(34 211 238 / 13%); }
+.app-input:focus { background: #fff; box-shadow: 0 0 0 3px rgb(239 68 68 / 13%); }
 
 table { border-collapse: separate; border-spacing: 0; }
 tbody tr { transition: background-color .16s ease; }
-tbody tr:hover { background: rgb(240 249 255 / 72%); }
+tbody tr:hover { background: rgb(254 242 242 / 72%); }
 thead th { letter-spacing: .055em; font-weight: 700; }
 
 .login-shell {
   position: relative;
   overflow: hidden;
   background:
-    radial-gradient(circle at 18% 12%, rgb(34 211 238 / 18%), transparent 23rem),
-    radial-gradient(circle at 86% 88%, rgb(14 116 144 / 16%), transparent 28rem),
-    linear-gradient(140deg, #eef7fb 0%, #f8fafc 48%, #edf4f8 100%);
+    radial-gradient(circle at 18% 12%, rgb(239 68 68 / 14%), transparent 23rem),
+    radial-gradient(circle at 86% 88%, rgb(153 27 27 / 12%), transparent 28rem),
+    linear-gradient(140deg, #f8fafc 0%, #ffffff 48%, #f1f5f9 100%);
 }
 .login-shell::before {
   content: "";
   position: absolute;
   width: 24rem;
   height: 24rem;
-  border: 1px solid rgb(34 211 238 / 18%);
+  border: 1px solid rgb(239 68 68 / 18%);
   border-radius: 50%;
   top: -12rem;
   right: -7rem;
@@ -105,7 +105,7 @@ thead th { letter-spacing: .055em; font-weight: 700; }
     position: sticky;
     top: 0;
     overflow-y: auto;
-    box-shadow: 0 12px 30px -22px rgb(2 20 40 / 85%);
+    box-shadow: 0 12px 30px -22px rgb(69 10 10 / 85%);
   }
   .app-sidebar > div:first-child { padding: .65rem 1rem .4rem; }
   .app-sidebar .brand-panel { width: 9rem; margin: 0 auto; }

@@ -596,8 +596,8 @@ export default function App() {
           <path d="M0,6 C40,0 80,12 120,6 C160,0 200,12 256,6 L256,12 L0,12 Z" fill="url(#wave)" />
           <defs>
             <linearGradient id="wave" x1="0" x2="1">
-              <stop offset="0%" stopColor="#22d3ee" />
-              <stop offset="100%" stopColor="#0e7490" />
+              <stop offset="0%" stopColor="#ef4444" />
+              <stop offset="100%" stopColor="#991b1b" />
             </linearGradient>
           </defs>
         </svg>
