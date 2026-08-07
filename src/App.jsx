@@ -2233,7 +2233,7 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
   const clienteFormInicial = {
     tipoPessoa: "fisica", nome: "", cpfCnpj: "", dataNascimento: "", email: "", telefone: "",
     cep: "", endereco: "", numero: "", bairro: "", cidade: "", estado: "",
-    marca: "", veiculo: "", cor: "", ano: "", placa: "", motorista: "",
+    tipoVeiculo: "", marca: "", veiculo: "", cor: "", ano: "", placa: "", motorista: "",
   };
   const [form, setForm] = useState(clienteFormInicial);
   const [busca, setBusca] = useState("");
@@ -2319,6 +2319,17 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
                 <p className="text-xs text-slate-500">Identificação do carro e da pessoa responsável por levá-lo ao lava-jato.</p>
               </div>
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                <Field label="Tipo de veículo">
+                  <select className={inputCls} value={form.tipoVeiculo} onChange={(e) => setForm({ ...form, tipoVeiculo: e.target.value })}>
+                    <option value="">Selecionar tipo</option>
+                    <option value="carro">Carro</option>
+                    <option value="moto">Moto</option>
+                    <option value="caminhao">Caminhão</option>
+                    <option value="van">Van</option>
+                    <option value="utilitario">Utilitário</option>
+                    <option value="outro">Outro</option>
+                  </select>
+                </Field>
                 <Field label="Marca"><input className={inputCls} placeholder="Ex.: Toyota" value={form.marca} onChange={(e) => setForm({ ...form, marca: e.target.value })} /></Field>
                 <Field label="Modelo"><input className={inputCls} placeholder="Ex.: Corolla" value={form.veiculo} onChange={(e) => setForm({ ...form, veiculo: e.target.value })} /></Field>
                 <Field label="Cor"><input className={inputCls} placeholder="Ex.: Prata" value={form.cor} onChange={(e) => setForm({ ...form, cor: e.target.value })} /></Field>
@@ -2359,6 +2370,7 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
                     <>
                       <td className="px-4 py-3 text-slate-500">
                         <div>{[c.marca, c.veiculo].filter(Boolean).join(" ") || "-"}</div>
+                        {c.tipoVeiculo && <div className="mt-0.5 text-xs capitalize text-slate-400">{c.tipoVeiculo === "caminhao" ? "Caminhão" : c.tipoVeiculo === "utilitario" ? "Utilitário" : c.tipoVeiculo}</div>}
                         {(c.cor || c.ano || c.placa) && <div className="mt-0.5 text-xs text-slate-400">{[c.cor, c.ano, c.placa].filter(Boolean).join(" · ")}</div>}
                       </td>
                       <td className="px-4 py-3 text-slate-500">{c.motorista || "-"}</td>

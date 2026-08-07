@@ -31,6 +31,7 @@ alter table public.clientes
   add column if not exists bairro text,
   add column if not exists cidade text,
   add column if not exists estado text,
+  add column if not exists tipo_veiculo text,
   add column if not exists marca text,
   add column if not exists veiculo text,
   add column if not exists cor text,
