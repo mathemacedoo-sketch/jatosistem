@@ -567,10 +567,10 @@ export default function App() {
     { id: "dashboard", label: "Painel", icon: LayoutDashboard },
     { id: "ordens", label: "Ordens de Serviço", icon: ClipboardList },
     { id: "clientes", label: "Clientes", icon: Users },
-    { id: "funcionarios", label: "Funcionários", icon: UserCog },
     { id: "catalogo", label: "Produtos e Servi\u00e7os", icon: Boxes },
     { id: "receber", label: "Contas a Receber", icon: Wallet },
     { id: "pagar", label: "Contas a Pagar", icon: Landmark },
+    { id: "funcionarios", label: "Funcionários", icon: UserCog },
   ].filter((item) => podeAcessar(item.id));
 
   if (!loaded) {
@@ -625,14 +625,6 @@ export default function App() {
           </defs>
         </svg>
         <nav className="flex-1 px-3 py-4 space-y-1">
-          {isMaster && (
-            <button onClick={() => setTab("empresas")} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition ${tab === "empresas" ? "bg-orange-500/20 text-orange-200 border border-orange-400/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "text-slate-300 hover:bg-white/5 hover:text-white border border-transparent"}`}>
-              <Building2 size={17} /> Empresas
-            </button>
-          )}
-          {podeGerenciarUsuarios && <button onClick={() => setTab("usuarios")} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition ${tab === "usuarios" ? "bg-orange-500/20 text-orange-200 border border-orange-400/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "text-slate-300 hover:bg-white/5 hover:text-white border border-transparent"}`}>
-            <UserCog size={17} /> Usuários
-          </button>}
           {NAV.map((n) => {
             const Icon = n.icon;
             const active = tab === n.id;
@@ -656,6 +648,14 @@ export default function App() {
               </button>
             );
           })}
+          {isMaster && (
+            <button onClick={() => setTab("empresas")} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition ${tab === "empresas" ? "bg-orange-500/20 text-orange-200 border border-orange-400/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "text-slate-300 hover:bg-white/5 hover:text-white border border-transparent"}`}>
+              <Building2 size={17} /> Empresas
+            </button>
+          )}
+          {podeGerenciarUsuarios && <button onClick={() => setTab("usuarios")} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition ${tab === "usuarios" ? "bg-orange-500/20 text-orange-200 border border-orange-400/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "text-slate-300 hover:bg-white/5 hover:text-white border border-transparent"}`}>
+            <UserCog size={17} /> Usuários
+          </button>}
         </nav>
         <div className="px-5 py-4 text-[11px] text-slate-400 border-t border-white/10">
           <div className="mb-1 font-medium text-slate-200">{authUser?.nome || "Usuário"}</div>
