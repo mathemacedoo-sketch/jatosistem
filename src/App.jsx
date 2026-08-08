@@ -2923,7 +2923,7 @@ function ContasReceber({ db, update, empresa }) {
         {pendentes.length === 0 ? <EmptyState text="Nenhuma conta a receber no momento." /> : (
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
-              <tr><th className="text-left px-4 py-3">OS</th><th className="text-left px-4 py-3">Cliente</th><th className="text-left px-4 py-3">Vencimento</th><th className="text-right px-4 py-3">Valor pendente</th><th className="text-left px-4 py-3">Baixa</th><th className="text-left px-4 py-3">Status</th><th className="px-4 py-3"></th></tr>
+              <tr><th className="text-left px-4 py-3">OS</th><th className="text-left px-4 py-3">Cliente</th><th className="text-left px-4 py-3">Vencimento</th><th className="text-right px-4 py-3">Valor da conta</th><th className="text-right px-4 py-3">Valor pendente</th><th className="text-left px-4 py-3">Baixa</th><th className="text-left px-4 py-3">Status</th><th className="px-4 py-3"></th></tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {pendentes.map((o) => {
@@ -2943,6 +2943,7 @@ function ContasReceber({ db, update, empresa }) {
                         onChange={(e) => atualizarVencimento(o.id, e.target.value)}
                       />
                     </td>
+                    <td className="px-4 py-3 text-right font-medium text-slate-700">{brl(Number(o.valorParcela ?? o.total ?? 0))}</td>
                     <td className="px-4 py-3 text-right font-semibold">{brl(Math.max(0, Number(o.valorParcela || 0) - Number(o.valorPago || 0)))}</td>
                     <td className="px-4 py-3 text-slate-500">{o.dataBaixa ? fmtDate(o.dataBaixa) : "-"}</td>
                     <td className="px-4 py-3">{vencida ? <Badge tone="red">Vencida</Badge> : <StatusBadge status={o.statusPagamento} />}</td>
