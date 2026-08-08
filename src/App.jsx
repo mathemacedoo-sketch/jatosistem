@@ -773,7 +773,7 @@ function LoginScreen({ auth, setAuth, entrar, db }) {
           <input type="password" className={inputCls} value={auth.senha} onChange={(e) => setAuth((prev) => ({ ...prev, senha: e.target.value }))} />
         </Field>
         {erro && <div className="text-sm text-red-600">{erro}</div>}
-        <button onClick={() => { const user = (db.usuarios || []).find((u) => u.usuario === auth.usuario && u.senha === auth.senha); if (!user) { setErro("Usuário ou senha inválidos."); return; } setErro(""); entrar(); }} className="w-full rounded-xl bg-gradient-to-br from-orange-700 to-emerald-800 text-white font-semibold py-2.5">Entrar no MM ERP</button>
+        <button onClick={() => { const user = (db.usuarios || []).find((u) => u.usuario === auth.usuario && u.senha === auth.senha); if (!user) { setErro("Usuário ou senha inválidos."); return; } setErro(""); entrar(); }} className="w-full rounded-xl font-semibold py-2.5" style={{ backgroundColor: "#9a3412", color: "#ffffff", border: "1px solid #7c2d12" }}>Entrar no MM ERP</button>
         <p className="text-center text-[11px] text-slate-400">Desenvolvido e mantido por <strong className="font-semibold text-slate-500">MM Tecnologia</strong></p>
       </Card>
     </div>
@@ -1889,7 +1889,7 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
           <button onClick={() => salvar(false)} disabled={itens.length === 0 || !clienteId} className="w-full rounded-xl border border-emerald-300 bg-white px-5 py-2.5 text-sm font-semibold text-emerald-800 disabled:opacity-40 sm:w-auto">
             Salvar OS
           </button>
-          <button onClick={() => salvar(true)} disabled={itens.length === 0 || !clienteId} className="w-full rounded-xl bg-gradient-to-br from-orange-700 to-emerald-800 px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40 sm:w-auto">
+          <button onClick={() => salvar(true)} disabled={itens.length === 0 || !clienteId} className="w-full rounded-xl px-5 py-2.5 text-sm font-semibold transition hover:opacity-90 disabled:opacity-40 sm:w-auto" style={{ backgroundColor: "#9a3412", color: "#ffffff", border: "1px solid #7c2d12" }}>
             Concluir OS
           </button>
         </div>
@@ -2188,7 +2188,7 @@ function Ordens({ db, update, empresa, onEditarNaOS, embedded = false }) {
           <div className="flex justify-end gap-2">
             <button onClick={() => salvarEdicao(false)} className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700">Salvar alterações</button>
             {["rascunho", "pendente", "estornado"].includes(db.ordens.find((ordem) => ordem.id === editandoOrdemId)?.statusOS) && (
-              <button onClick={() => salvarEdicao(true)} className="rounded-xl bg-orange-700 px-4 py-2.5 text-sm font-semibold text-white">Concluir OS</button>
+              <button onClick={() => salvarEdicao(true)} className="rounded-xl px-4 py-2.5 text-sm font-semibold" style={{ backgroundColor: "#9a3412", color: "#ffffff", border: "1px solid #7c2d12" }}>Concluir OS</button>
             )}
           </div>
         </Card>
