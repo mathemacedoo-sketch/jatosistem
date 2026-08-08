@@ -29,6 +29,12 @@ import {
 
 // ---------- helpers ----------
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const veiculosDoCliente = (cliente = {}) => {
+  if (Array.isArray(cliente.veiculos) && cliente.veiculos.length) return cliente.veiculos;
+  return cliente.tipoVeiculo || cliente.marca || cliente.veiculo || cliente.cor || cliente.ano || cliente.placa || cliente.motorista
+    ? [{ id: `legado-${cliente.id || "cliente"}`, tipoVeiculo: cliente.tipoVeiculo || "", marca: cliente.marca || "", veiculo: cliente.veiculo || "", cor: cliente.cor || "", ano: cliente.ano || "", placa: cliente.placa || "", motorista: cliente.motorista || "" }]
+    : [];
+};
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const brl = (v) =>
   (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -1492,6 +1498,7 @@ function OrdensWorkspace({ db, update, empresa, ordemEmEdicao, setOrdemEmEdicao,
 // ---------- Nova OS ----------
 function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcluirFechado, podeEditarValor, embedded = false }) {
   const [clienteId, setClienteId] = useState(db.clientes[0]?.id || "");
+  const [veiculoId, setVeiculoId] = useState("");
   const [buscaCliente, setBuscaCliente] = useState("");
   const [seletorClienteAberto, setSeletorClienteAberto] = useState(false);
   const [itens, setItens] = useState([]);
@@ -1512,6 +1519,7 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
   useEffect(() => {
     if (!ordemEmEdicao) return;
     setClienteId(ordemEmEdicao.clienteId || "");
+    setVeiculoId(ordemEmEdicao.veiculoId || "");
     setBuscaCliente("");
     setItens((ordemEmEdicao.itens || []).map((item) => ({ ...item, uidLine: item.uidLine || uid() })));
     setFormaPagamento(ordemEmEdicao.formaPagamento || "Dinheiro");
@@ -1533,9 +1541,10 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
     !termoCliente
     || cliente.nome.toLowerCase().includes(termoCliente)
     || cliente.codigoExibicao.toLowerCase().includes(termoCliente)
-    || (cliente.placa || "").toLowerCase().includes(termoCliente)
-    || (cliente.motorista || "").toLowerCase().includes(termoCliente)
+    || veiculosDoCliente(cliente).some((veiculo) => (veiculo.placa || "").toLowerCase().includes(termoCliente) || (veiculo.motorista || "").toLowerCase().includes(termoCliente))
   );
+  const clienteSelecionado = db.clientes.find((cliente) => cliente.id === clienteId);
+  const veiculosDisponiveis = veiculosDoCliente(clienteSelecionado);
   const subtotalItens = itens.reduce((s, i) => s + i.subtotal, 0);
   const descontoAplicado = Math.min(Math.max(Number(desconto) || 0, 0), subtotalItens);
   const total = Math.max(0, subtotalItens - descontoAplicado);
@@ -1590,6 +1599,7 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
     if (itens.length === 0 || !clienteId) return;
     if (concluir && hasServico && !funcionarioId) return;
     const cliente = db.clientes.find((c) => c.id === clienteId);
+    const veiculoSelecionado = veiculosDoCliente(cliente).find((veiculo) => veiculo.id === veiculoId) || veiculosDoCliente(cliente)[0] || {};
     const numero = ordemEmEdicao?.numero || (db.ordens.filter((item) => !item.lancamentoManual).length + 1).toString().padStart(4, "0");
     const ordemId = ordemEmEdicao?.id || uid();
     const vendaCarteira = formaPagamento === "Carteira";
@@ -1600,12 +1610,13 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
       data: todayISO(),
       clienteId,
       clienteNome: cliente?.nome || "Consumidor",
-      veiculo: cliente?.veiculo || "",
-      marca: cliente?.marca || "",
-      cor: cliente?.cor || "",
-      ano: cliente?.ano || "",
-      placa: cliente?.placa || "",
-      motorista: cliente?.motorista || "",
+      veiculoId: veiculoSelecionado.id || "",
+      veiculo: veiculoSelecionado.veiculo || "",
+      marca: veiculoSelecionado.marca || "",
+      cor: veiculoSelecionado.cor || "",
+      ano: veiculoSelecionado.ano || "",
+      placa: veiculoSelecionado.placa || "",
+      motorista: veiculoSelecionado.motorista || "",
       itens,
       subtotal: subtotalItens,
       desconto: descontoAplicado,
@@ -1670,7 +1681,7 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
             onClick={() => { setBuscaCliente(""); setSeletorClienteAberto(true); }}
             className={inputCls + " flex items-center justify-between text-left"}
           >
-            <span>{clienteId ? (() => { const cliente = clientesComCodigo.find((item) => item.id === clienteId); return cliente ? `#${cliente.codigoExibicao} · ${cliente.nome}${cliente.placa ? ` · ${cliente.placa}` : ""}` : "Selecionar cliente"; })() : "Selecionar cliente"}</span>
+            <span>{clienteId ? (() => { const cliente = clientesComCodigo.find((item) => item.id === clienteId); return cliente ? `#${cliente.codigoExibicao} · ${cliente.nome}` : "Selecionar cliente"; })() : "Selecionar cliente"}</span>
             <Search size={17} className="text-emerald-700" />
           </button>
         </Field>
@@ -1698,18 +1709,27 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
                     key={cliente.id}
                     onClick={() => {
                       setClienteId(cliente.id);
+                      setVeiculoId(veiculosDoCliente(cliente)[0]?.id || "");
                       setBuscaCliente("");
                       setSeletorClienteAberto(false);
                     }}
                     className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-orange-50 hover:text-orange-700"
                   >
                     <span><strong>#{cliente.codigoExibicao}</strong> · {cliente.nome}</span>
-                    <span className="text-right text-xs text-slate-400">{cliente.placa || cliente.cpfCnpj || ""}{cliente.motorista ? <><br />{cliente.motorista}</> : null}</span>
+                    <span className="text-right text-xs text-slate-400">{veiculosDoCliente(cliente).length ? `${veiculosDoCliente(cliente).length} veículo(s)` : cliente.cpfCnpj || ""}</span>
                   </button>
                 ))}
               </div>
             </div>
           </div>
+        )}
+
+        {veiculosDisponiveis.length > 0 && (
+          <Field label="Veículo desta ordem">
+            <select className={inputCls} value={veiculoId || veiculosDisponiveis[0].id} onChange={(e) => setVeiculoId(e.target.value)}>
+              {veiculosDisponiveis.map((veiculo) => <option key={veiculo.id} value={veiculo.id}>{[veiculo.marca, veiculo.veiculo, veiculo.placa].filter(Boolean).join(" · ") || "Veículo sem identificação"}</option>)}
+            </select>
+          </Field>
         )}
 
         <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 space-y-3">
@@ -2234,6 +2254,7 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
     tipoPessoa: "fisica", nome: "", cpfCnpj: "", dataNascimento: "", email: "", telefone: "",
     cep: "", endereco: "", numero: "", bairro: "", cidade: "", estado: "",
     tipoVeiculo: "", marca: "", veiculo: "", cor: "", ano: "", placa: "", motorista: "",
+    veiculos: [],
   };
   const [form, setForm] = useState(clienteFormInicial);
   const [busca, setBusca] = useState("");
@@ -2247,14 +2268,20 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
     }
     try {
       if (!empresaId) throw new Error("Não foi possível identificar a empresa deste cliente.");
+      const temVeiculoPendente = [form.tipoVeiculo, form.marca, form.veiculo, form.cor, form.ano, form.placa, form.motorista].some(Boolean);
+      const veiculos = temVeiculoPendente
+        ? [...form.veiculos, { id: uid(), tipoVeiculo: form.tipoVeiculo, marca: form.marca, veiculo: form.veiculo, cor: form.cor, ano: form.ano, placa: form.placa, motorista: form.motorista }]
+        : form.veiculos;
+      const primeiroVeiculo = veiculos[0] || {};
+      const dadosCliente = { ...form, ...primeiroVeiculo, veiculos };
       if (editandoId) {
-        await update("clientes", (prev) => prev.map((cliente) => cliente.id === editandoId ? { ...cliente, ...form } : cliente));
+        await update("clientes", (prev) => prev.map((cliente) => cliente.id === editandoId ? { ...cliente, ...dadosCliente } : cliente));
         setEditandoId(null);
         setForm(clienteFormInicial);
         return;
       }
       const proximoCodigo = String(Math.max(0, ...db.clientes.map((cliente) => Number(cliente.codigo) || 0)) + 1).padStart(4, "0");
-      const cliente = await createCliente({ codigo: proximoCodigo, ...form, empresaId });
+      const cliente = await createCliente({ codigo: proximoCodigo, ...dadosCliente, empresaId });
       update("clientes", (prev) => [...prev, cliente]);
       setForm(clienteFormInicial);
     } catch (error) {
@@ -2266,6 +2293,8 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
     const dadosFormulario = Object.fromEntries(
       Object.keys(clienteFormInicial).map((campo) => [campo, cliente[campo] ?? clienteFormInicial[campo]])
     );
+    dadosFormulario.veiculos = veiculosDoCliente(cliente);
+    ["tipoVeiculo", "marca", "veiculo", "cor", "ano", "placa", "motorista"].forEach((campo) => { dadosFormulario[campo] = ""; });
     setEditandoId(cliente.id);
     setForm(dadosFormulario);
     formularioRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -2275,14 +2304,18 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
     setForm(clienteFormInicial);
   };
   const mostraCamposVeiculo = (empresaSegmento || "lava-jato").toLowerCase() === "lava-jato";
+  const adicionarVeiculo = () => {
+    if (![form.tipoVeiculo, form.marca, form.veiculo, form.cor, form.ano, form.placa, form.motorista].some(Boolean)) return;
+    const novo = { id: uid(), tipoVeiculo: form.tipoVeiculo, marca: form.marca, veiculo: form.veiculo, cor: form.cor, ano: form.ano, placa: form.placa, motorista: form.motorista };
+    setForm((anterior) => ({ ...anterior, veiculos: [...anterior.veiculos, novo], tipoVeiculo: "", marca: "", veiculo: "", cor: "", ano: "", placa: "", motorista: "" }));
+  };
   const remove = (id) => update("clientes", (prev) => prev.filter((c) => c.id !== id));
 
   const lista = db.clientes.filter((c) => {
     const termo = busca.toLowerCase();
     return c.nome.toLowerCase().includes(termo)
       || (c.cpfCnpj || "").toLowerCase().includes(termo)
-      || (c.placa || "").toLowerCase().includes(termo)
-      || (c.motorista || "").toLowerCase().includes(termo);
+      || veiculosDoCliente(c).some((veiculo) => (veiculo.placa || "").toLowerCase().includes(termo) || (veiculo.motorista || "").toLowerCase().includes(termo));
   });
 
   return (
@@ -2337,6 +2370,18 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
                 <Field label="Placa"><input maxLength={8} className={inputCls} placeholder="Ex.: ABC1D23" value={form.placa} onChange={(e) => setForm({ ...form, placa: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 7) })} /></Field>
                 <Field label="Motorista/Responsável"><input className={inputCls} placeholder="Quem costuma levar o veículo?" value={form.motorista} onChange={(e) => setForm({ ...form, motorista: e.target.value })} /></Field>
               </div>
+              <button type="button" onClick={adicionarVeiculo} className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-50"><Plus size={15} /> Adicionar veículo à lista</button>
+              {form.veiculos.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  <div className="text-xs font-semibold uppercase text-slate-500">Veículos cadastrados ({form.veiculos.length})</div>
+                  {form.veiculos.map((veiculo, index) => (
+                    <div key={veiculo.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+                      <span><strong>{index + 1}.</strong> {[veiculo.marca, veiculo.veiculo, veiculo.placa].filter(Boolean).join(" · ") || "Veículo sem identificação"}{veiculo.motorista ? ` · ${veiculo.motorista}` : ""}</span>
+                      <button type="button" onClick={() => setForm((anterior) => ({ ...anterior, veiculos: anterior.veiculos.filter((item) => item.id !== veiculo.id) }))} className="ml-3 text-slate-400 hover:text-red-500" title="Remover veículo"><Trash2 size={15} /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -2369,11 +2414,9 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
                   {mostraCamposVeiculo && (
                     <>
                       <td className="px-4 py-3 text-slate-500">
-                        <div>{[c.marca, c.veiculo].filter(Boolean).join(" ") || "-"}</div>
-                        {c.tipoVeiculo && <div className="mt-0.5 text-xs capitalize text-slate-400">{c.tipoVeiculo === "caminhao" ? "Caminhão" : c.tipoVeiculo === "utilitario" ? "Utilitário" : c.tipoVeiculo}</div>}
-                        {(c.cor || c.ano || c.placa) && <div className="mt-0.5 text-xs text-slate-400">{[c.cor, c.ano, c.placa].filter(Boolean).join(" · ")}</div>}
+                        {veiculosDoCliente(c).length ? veiculosDoCliente(c).map((veiculo) => <div key={veiculo.id} className="mb-1 last:mb-0">{[veiculo.marca, veiculo.veiculo, veiculo.placa].filter(Boolean).join(" · ") || "Veículo sem identificação"}</div>) : "-"}
                       </td>
-                      <td className="px-4 py-3 text-slate-500">{c.motorista || "-"}</td>
+                      <td className="px-4 py-3 text-slate-500">{veiculosDoCliente(c).map((veiculo) => veiculo.motorista).filter(Boolean).join(", ") || "-"}</td>
                     </>
                   )}
                   <td className="px-4 py-3 text-right">

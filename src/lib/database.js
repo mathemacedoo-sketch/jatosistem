@@ -45,6 +45,20 @@ const clienteFromRow = (row) => ({
   ano: row.ano || "",
   placa: row.placa || "",
   motorista: row.motorista || "",
+  veiculos: Array.isArray(row.veiculos) && row.veiculos.length
+    ? row.veiculos
+    : (row.tipo_veiculo || row.marca || row.veiculo || row.cor || row.ano || row.placa || row.motorista
+      ? [{
+          id: `legado-${row.id}`,
+          tipoVeiculo: row.tipo_veiculo || "",
+          marca: row.marca || "",
+          veiculo: row.veiculo || "",
+          cor: row.cor || "",
+          ano: row.ano || "",
+          placa: row.placa || "",
+          motorista: row.motorista || "",
+        }]
+      : []),
 });
 
 const clienteToRow = (cliente) => ({
@@ -70,6 +84,7 @@ const clienteToRow = (cliente) => ({
   ano: cliente.ano || null,
   placa: cliente.placa || null,
   motorista: cliente.motorista || null,
+  veiculos: Array.isArray(cliente.veiculos) ? cliente.veiculos : [],
 });
 
 const throwIfError = (result, operation) => {
