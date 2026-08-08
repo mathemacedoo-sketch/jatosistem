@@ -31,13 +31,30 @@ alter table public.clientes
   add column if not exists bairro text,
   add column if not exists cidade text,
   add column if not exists estado text,
+  add column if not exists tipo_veiculo text,
   add column if not exists marca text,
   add column if not exists veiculo text,
   add column if not exists cor text,
   add column if not exists ano text,
   add column if not exists placa text,
   add column if not exists motorista text,
+  add column if not exists veiculos jsonb not null default '[]'::jsonb,
   add column if not exists dt_exc timestamptz;
+
+-- Converte automaticamente o veículo único dos cadastros antigos em uma lista.
+update public.clientes
+set veiculos = jsonb_build_array(jsonb_build_object(
+  'id', 'legado-' || id::text,
+  'tipoVeiculo', coalesce(tipo_veiculo, ''),
+  'marca', coalesce(marca, ''),
+  'veiculo', coalesce(veiculo, ''),
+  'cor', coalesce(cor, ''),
+  'ano', coalesce(ano, ''),
+  'placa', coalesce(placa, ''),
+  'motorista', coalesce(motorista, '')
+))
+where (veiculos is null or veiculos = '[]'::jsonb)
+  and coalesce(tipo_veiculo, marca, veiculo, cor, ano, placa, motorista) is not null;
 
 create index if not exists sistema_registros_ativos_idx
   on public.sistema_registros (modulo, empresa_id)

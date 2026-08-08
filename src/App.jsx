@@ -23,11 +23,18 @@ import {
   Pencil,
   Printer,
   RotateCcw,
-  ExternalLink
+  ExternalLink,
+  MessageCircle
 } from "lucide-react";
 
 // ---------- helpers ----------
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const veiculosDoCliente = (cliente = {}) => {
+  if (Array.isArray(cliente.veiculos) && cliente.veiculos.length) return cliente.veiculos;
+  return cliente.tipoVeiculo || cliente.marca || cliente.veiculo || cliente.cor || cliente.ano || cliente.placa || cliente.motorista
+    ? [{ id: `legado-${cliente.id || "cliente"}`, tipoVeiculo: cliente.tipoVeiculo || "", marca: cliente.marca || "", veiculo: cliente.veiculo || "", cor: cliente.cor || "", ano: cliente.ano || "", placa: cliente.placa || "", motorista: cliente.motorista || "" }]
+    : [];
+};
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const brl = (v) =>
   (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -39,6 +46,15 @@ const fmtDate = (d) => {
   if (!d) return "-";
   const [y, m, day] = d.split("-");
   return `${day}/${m}/${y}`;
+};
+const dayNumber = (date) => {
+  const [year, month, day] = (date || "").split("-").map(Number);
+  return year && month && day ? Math.floor(Date.UTC(year, month - 1, day) / 86400000) : null;
+};
+const addDays = (date, days) => {
+  const base = dayNumber(date);
+  if (base === null) return "";
+  return new Date((base + Number(days || 0)) * 86400000).toISOString().slice(0, 10);
 };
 const monthKey = (d) => (d || "").slice(0, 7);
 const DEFAULT_ADMIN_USERNAME = "admin";
@@ -205,7 +221,57 @@ const getEmpresaData = (db, empresaId) => ({
   produtos: (db.produtos || []).filter((item) => item.empresaId === empresaId),
   ordens: (db.ordens || []).filter((item) => item.empresaId === empresaId),
   contasPagar: (db.contasPagar || []).filter((item) => item.empresaId === empresaId),
+  contatosRetorno: (db.contatosRetorno || []).filter((item) => item.empresaId === empresaId),
 });
+
+const clientesParaRetorno = (db, hoje = todayISO()) => {
+  const servicos = new Map((db.servicos || []).map((servico) => [String(servico.id), servico]));
+  const clientes = new Map((db.clientes || []).map((cliente) => [String(cliente.id), cliente]));
+  const ultimoPorCliente = new Map();
+
+  [...(db.ordens || [])]
+    .filter((ordem) => ordem.statusOS === "concluido" && ordem.clienteId && ordem.data)
+    .sort((a, b) => String(b.data).localeCompare(String(a.data)))
+    .forEach((ordem) => {
+      if (ultimoPorCliente.has(String(ordem.clienteId))) return;
+      const item = (ordem.itens || []).find((registro) => {
+        const servico = servicos.get(String(registro.itemId));
+        return registro.tipo === "servico" && Number(servico?.diasRetornoSugerido) > 0;
+      });
+      if (!item) return;
+      const servico = servicos.get(String(item.itemId));
+      ultimoPorCliente.set(String(ordem.clienteId), { ordem, servico, item });
+    });
+
+  const hojeNumero = dayNumber(hoje);
+  return [...ultimoPorCliente.entries()].flatMap(([clienteId, { ordem, servico, item }]) => {
+    const cliente = clientes.get(clienteId);
+    const retornoPrevisto = addDays(ordem.data, servico.diasRetornoSugerido);
+    const diasParaRetorno = dayNumber(retornoPrevisto) - hojeNumero;
+    if (!cliente || diasParaRetorno > 5) return [];
+    const status = diasParaRetorno > 0 ? "proximo" : diasParaRetorno >= -7 ? "hora" : "atrasado";
+    const contatos = (db.contatosRetorno || [])
+      .filter((contato) => String(contato.clienteId) === clienteId)
+      .sort((a, b) => String(b.dataContato).localeCompare(String(a.dataContato)));
+    return [{
+      cliente,
+      ordem,
+      servico,
+      nomeServico: item.descricao || servico.nome || item.nome || "Serviço",
+      ultimoAtendimento: ordem.data,
+      retornoPrevisto,
+      diasDesdeUltimoAtendimento: hojeNumero - dayNumber(ordem.data),
+      diasAtraso: Math.max(0, -diasParaRetorno),
+      diasParaRetorno,
+      status,
+      ultimoContato: contatos[0]?.dataContato || "",
+    }];
+  }).sort((a, b) => {
+    const prioridade = { atrasado: 0, hora: 1, proximo: 2 };
+    return prioridade[a.status] - prioridade[b.status]
+      || dayNumber(a.retornoPrevisto) - dayNumber(b.retornoPrevisto);
+  });
+};
 
 const gerarParcelas = (baseId, total, quantidade, vencimentoBase) => {
   const qtd = Math.max(1, Number(quantidade) || 1);
@@ -296,6 +362,7 @@ const SEED = {
   ],
   ordens: [],
   contasPagar: [],
+  contatosRetorno: [],
 };
 
 const STORAGE_KEY = "jato_sistem_db_v1";
@@ -406,7 +473,7 @@ export default function App() {
           ordens: (initialData.ordens || []).map((ordem) => ordem.clienteNome === "Cliente Avulso" ? { ...ordem, clienteNome: "Consumidor" } : ordem),
         };
         const legacyCompanyId = initialData.empresas[0]?.id || empresaAdmId;
-        ["usuarios", "clientes", "funcionarios", "servicos", "produtos", "ordens", "contasPagar"].forEach((collection) => {
+        ["usuarios", "clientes", "funcionarios", "servicos", "produtos", "ordens", "contasPagar", "contatosRetorno"].forEach((collection) => {
           initialData[collection] = (initialData[collection] || []).map((item) =>
             item.empresaId ? item : { ...item, empresaId: legacyCompanyId }
           );
@@ -431,6 +498,7 @@ export default function App() {
           produtos: [],
           ordens: [],
           contasPagar: [],
+          contatosRetorno: [],
         };
         if (!active) return;
         dbRef.current = initialData;
@@ -592,10 +660,10 @@ export default function App() {
     { id: "dashboard", label: "Painel", icon: LayoutDashboard },
     { id: "ordens", label: "Ordens de Serviço", icon: ClipboardList },
     { id: "clientes", label: "Clientes", icon: Users },
-    { id: "funcionarios", label: "Funcionários", icon: UserCog },
     { id: "catalogo", label: "Produtos e Servi\u00e7os", icon: Boxes },
     { id: "receber", label: "Contas a Receber", icon: Wallet },
     { id: "pagar", label: "Contas a Pagar", icon: Landmark },
+    { id: "funcionarios", label: "Funcionários", icon: UserCog },
   ].filter((item) => podeAcessar(item.id));
 
   if (!loaded) {
@@ -650,14 +718,6 @@ export default function App() {
           </defs>
         </svg>
         <nav className="flex-1 px-3 py-4 space-y-1">
-          {isMaster && (
-            <button onClick={() => setTab("empresas")} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition ${tab === "empresas" ? "bg-orange-500/20 text-orange-200 border border-orange-400/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "text-slate-300 hover:bg-white/5 hover:text-white border border-transparent"}`}>
-              <Building2 size={17} /> Empresas
-            </button>
-          )}
-          {podeGerenciarUsuarios && <button onClick={() => setTab("usuarios")} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition ${tab === "usuarios" ? "bg-orange-500/20 text-orange-200 border border-orange-400/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "text-slate-300 hover:bg-white/5 hover:text-white border border-transparent"}`}>
-            <UserCog size={17} /> Usuários
-          </button>}
           {NAV.map((n) => {
             const Icon = n.icon;
             const active = tab === n.id;
@@ -681,6 +741,14 @@ export default function App() {
               </button>
             );
           })}
+          {isMaster && (
+            <button onClick={() => setTab("empresas")} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition ${tab === "empresas" ? "bg-orange-500/20 text-orange-200 border border-orange-400/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "text-slate-300 hover:bg-white/5 hover:text-white border border-transparent"}`}>
+              <Building2 size={17} /> Empresas
+            </button>
+          )}
+          {podeGerenciarUsuarios && <button onClick={() => setTab("usuarios")} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition ${tab === "usuarios" ? "bg-orange-500/20 text-orange-200 border border-orange-400/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "text-slate-300 hover:bg-white/5 hover:text-white border border-transparent"}`}>
+            <UserCog size={17} /> Usuários
+          </button>}
         </nav>
         <div className="px-5 py-4 text-[11px] text-slate-400 border-t border-white/10">
           <div className="mb-1 font-medium text-slate-200">{authUser?.nome || "Usuário"}</div>
@@ -692,7 +760,7 @@ export default function App() {
       {/* Main */}
       <main ref={mainRef} onScroll={saveScrollPosition} className="app-main flex-1 min-w-0 overflow-y-auto">
         <div className="max-w-7xl mx-auto p-6 md:p-8">
-          {tab === "dashboard" && podeAcessar("dashboard") && <Dashboard db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} stats={stats} />}
+          {tab === "dashboard" && podeAcessar("dashboard") && <Dashboard db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} stats={stats} update={update} authUser={authUser} />}
           {tab === "ordens" && <OrdensWorkspace db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresa={empresaAtiva} ordemEmEdicao={ordemEmEdicao} setOrdemEmEdicao={setOrdemEmEdicao} podeEditarValor={isMaster || isGerente} />}
           {tab === "clientes" && <Clientes db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresaId={auth.empresaId || auth.usuarioLogado?.empresaId || ""} empresaSegmento={empresaAtiva?.segmento || "lava-jato"} />}
           {tab === "funcionarios" && podeAcessar("funcionarios") && <FuncionariosScreen db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresaId={auth.empresaId || auth.usuarioLogado?.empresaId || ""} />}
@@ -737,7 +805,7 @@ function LoginScreen({ auth, setAuth, entrar, db }) {
           </select>
         </Field>}
         {erro && <div className="text-sm text-red-600">{erro}</div>}
-        <button onClick={() => { const user = (db.usuarios || []).find((u) => u.usuario === auth.usuario && u.senha === auth.senha && (!isDefaultAdmin || u.empresaId === auth.empresaId)); if (!user) { setErro(isDefaultAdmin && !auth.empresaId ? "Selecione a empresa." : "Usuário ou senha inválidos."); return; } setErro(""); entrar(); }} className="w-full rounded-xl bg-gradient-to-br from-orange-700 to-emerald-800 text-white font-semibold py-2.5">Entrar no MM ERP</button>
+        <button onClick={() => { const user = (db.usuarios || []).find((u) => u.usuario === auth.usuario && u.senha === auth.senha && (!isDefaultAdmin || u.empresaId === auth.empresaId)); if (!user) { setErro(isDefaultAdmin && !auth.empresaId ? "Selecione a empresa." : "Usuário ou senha inválidos."); return; } setErro(""); entrar(); }} className="w-full rounded-xl font-semibold py-2.5" style={{ backgroundColor: "#9a3412", color: "#ffffff", border: "1px solid #7c2d12" }}>Entrar no MM ERP</button>
         <p className="text-center text-[11px] text-slate-400">Desenvolvido e mantido por <strong className="font-semibold text-slate-500">MM Tecnologia</strong></p>
       </Card>
     </div>
@@ -1084,8 +1152,95 @@ function FuncionariosScreen({ db, update, empresaId }) {
   );
 }
 
+function RetornoStatusBadge({ status }) {
+  if (status === "atrasado") return <Badge tone="red">Atrasado</Badge>;
+  if (status === "hora") return <Badge tone="green">Hora de voltar</Badge>;
+  return <Badge tone="amber">Próximo</Badge>;
+}
+
+function ClientesRetornoModal({ clientes, update, authUser, onClose }) {
+  const [filtro, setFiltro] = useState("todos");
+  const hoje = todayISO();
+  const lista = clientes.filter((item) => {
+    if (filtro === "contatados") return Boolean(item.ultimoContato);
+    if (filtro === "nao-contatados") return !item.ultimoContato;
+    return true;
+  });
+
+  const abrirWhatsApp = (item) => {
+    const telefone = onlyDigits(item.cliente.telefone);
+    if (!telefone) return;
+    const numero = telefone.startsWith("55") && telefone.length >= 12 ? telefone : `55${telefone}`;
+    const mensagem = `Olá, ${item.cliente.nome}! Tudo bem?\n\nJá faz um tempinho desde o seu último serviço de ${item.nomeServico}.\n\nSe quiser, podemos agendar um novo horário para você. 😊`;
+    update("contatosRetorno", (prev) => [...prev, {
+      id: uid(),
+      clienteId: item.cliente.id,
+      ordemServicoId: item.ordem.id,
+      servicoId: item.servico.id,
+      dataContato: hoje,
+      tipoContato: "whatsapp",
+      usuarioId: authUser?.id || null,
+      createdAt: new Date().toISOString(),
+    }]);
+    window.open(`https://wa.me/${numero}?text=${encodeURIComponent(mensagem)}`, "_blank", "noopener,noreferrer");
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-3 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="retorno-title">
+      <Card className="flex max-h-[92vh] w-full max-w-7xl flex-col overflow-hidden">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+          <div>
+            <h2 id="retorno-title" className="headline text-xl font-bold text-slate-900">Clientes na hora de voltar</h2>
+            <p className="mt-1 text-sm text-slate-500">Clientes com retorno previsto para os próximos dias ou em atraso.</p>
+          </div>
+          <button type="button" onClick={onClose} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100" title="Fechar"><X size={19} /></button>
+        </div>
+
+        <div className="flex flex-wrap gap-2 border-b border-slate-100 px-5 py-3">
+          {[
+            ["todos", "Todos"],
+            ["nao-contatados", "Não contatados"],
+            ["contatados", "Contatados"],
+          ].map(([valor, rotulo]) => (
+            <button key={valor} type="button" onClick={() => setFiltro(valor)} className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${filtro === valor ? "bg-emerald-800 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{rotulo}</button>
+          ))}
+        </div>
+
+        <div className="overflow-auto">
+          {lista.length === 0 ? <div className="p-5"><EmptyState text="Nenhum cliente encontrado neste filtro." /></div> : (
+            <table className="w-full min-w-[1050px] text-sm">
+              <thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500">
+                <tr><th className="px-4 py-3 text-left">Cliente</th><th className="px-4 py-3 text-left">Último serviço</th><th className="px-4 py-3 text-left">Último atendimento</th><th className="px-4 py-3 text-left">Retorno previsto</th><th className="px-4 py-3 text-left">Dias desde atendimento</th><th className="px-4 py-3 text-left">Status</th><th className="px-4 py-3 text-left">WhatsApp</th><th className="px-4 py-3 text-right">Ações</th></tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {lista.map((item) => {
+                  const semTelefone = !onlyDigits(item.cliente.telefone);
+                  return (
+                    <tr key={item.cliente.id} className="align-top">
+                      <td className="px-4 py-3 font-medium text-slate-900">{item.cliente.nome}</td>
+                      <td className="px-4 py-3 text-slate-600">{item.nomeServico}</td>
+                      <td className="px-4 py-3 text-slate-600">{fmtDate(item.ultimoAtendimento)}</td>
+                      <td className="px-4 py-3 text-slate-600">{fmtDate(item.retornoPrevisto)}</td>
+                      <td className="px-4 py-3 text-slate-600">{item.diasDesdeUltimoAtendimento} dias</td>
+                      <td className="px-4 py-3"><RetornoStatusBadge status={item.status} />{item.diasAtraso > 0 && <div className="mt-1 text-xs text-red-600">{item.diasAtraso} dias de atraso</div>}</td>
+                      <td className="px-4 py-3 text-slate-600">{item.cliente.telefone || "-"}<div className="mt-1 text-xs text-slate-400">{item.ultimoContato ? (item.ultimoContato === hoje ? "Contatado hoje" : `Último contato: ${fmtDate(item.ultimoContato)}`) : "Ainda não contatado"}</div></td>
+                      <td className="px-4 py-3 text-right"><button type="button" disabled={semTelefone} title={semTelefone ? "Cliente sem WhatsApp cadastrado" : "Abrir conversa no WhatsApp"} onClick={() => abrirWhatsApp(item)} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"><MessageCircle size={15} /> WhatsApp</button></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 // ---------- Dashboard ----------
-function Dashboard({ db, stats }) {
+function Dashboard({ db, stats, update, authUser }) {
+  const [retornosAbertos, setRetornosAbertos] = useState(false);
+  const retornos = useMemo(() => clientesParaRetorno(db), [db]);
   const ultimasOrdens = db.ordens.filter((ordem) => !ordem.lancamentoManual).sort((a, b) => (a.data < b.data ? 1 : -1)).slice(0, 6);
   return (
     <div className="space-y-6">
@@ -1100,6 +1255,19 @@ function Dashboard({ db, stats }) {
         <StatCard icon={Wallet} label="A receber" value={brl(stats.aReceber)} tone="amber" />
         <StatCard icon={Landmark} label="A pagar" value={brl(stats.aPagar)} tone="red" />
       </div>
+
+      <Card className="p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-emerald-700 to-orange-700 text-white shadow-lg shadow-slate-200"><MessageCircle size={19} /></div>
+            <div>
+              <h2 className="font-semibold text-slate-800">Clientes na hora de voltar</h2>
+              <p className="mt-0.5 text-sm text-slate-500">{retornos.length} {retornos.length === 1 ? "cliente pode estar pronto" : "clientes podem estar prontos"} para retornar</p>
+            </div>
+          </div>
+          <button type="button" onClick={() => setRetornosAbertos(true)} className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-900"><ExternalLink size={16} /> Ver clientes</button>
+        </div>
+      </Card>
 
       <div>
         <Card className="p-5">
@@ -1129,6 +1297,7 @@ function Dashboard({ db, stats }) {
         </Card>
 
       </div>
+      {retornosAbertos && <ClientesRetornoModal clientes={retornos} update={update} authUser={authUser} onClose={() => setRetornosAbertos(false)} />}
     </div>
   );
 }
@@ -1363,10 +1532,12 @@ function OrdensWorkspace({ db, update, empresa, ordemEmEdicao, setOrdemEmEdicao,
 // ---------- Nova OS ----------
 function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcluirFechado, podeEditarValor, embedded = false }) {
   const [clienteId, setClienteId] = useState(db.clientes[0]?.id || "");
+  const [veiculoId, setVeiculoId] = useState("");
   const [buscaCliente, setBuscaCliente] = useState("");
   const [seletorClienteAberto, setSeletorClienteAberto] = useState(false);
   const [itens, setItens] = useState([]);
   const [itemSel, setItemSel] = useState("");
+  const [descricaoItem, setDescricaoItem] = useState("");
   const [valorItem, setValorItem] = useState("");
   const [qtd, setQtd] = useState(1);
   const [formaPagamento, setFormaPagamento] = useState("Dinheiro");
@@ -1383,6 +1554,7 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
   useEffect(() => {
     if (!ordemEmEdicao) return;
     setClienteId(ordemEmEdicao.clienteId || "");
+    setVeiculoId(ordemEmEdicao.veiculoId || "");
     setBuscaCliente("");
     setItens((ordemEmEdicao.itens || []).map((item) => ({ ...item, uidLine: item.uidLine || uid() })));
     setFormaPagamento(ordemEmEdicao.formaPagamento || "Dinheiro");
@@ -1404,9 +1576,10 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
     !termoCliente
     || cliente.nome.toLowerCase().includes(termoCliente)
     || cliente.codigoExibicao.toLowerCase().includes(termoCliente)
-    || (cliente.placa || "").toLowerCase().includes(termoCliente)
-    || (cliente.motorista || "").toLowerCase().includes(termoCliente)
+    || veiculosDoCliente(cliente).some((veiculo) => (veiculo.placa || "").toLowerCase().includes(termoCliente) || (veiculo.motorista || "").toLowerCase().includes(termoCliente))
   );
+  const clienteSelecionado = db.clientes.find((cliente) => cliente.id === clienteId);
+  const veiculosDisponiveis = veiculosDoCliente(clienteSelecionado);
   const subtotalItens = itens.reduce((s, i) => s + i.subtotal, 0);
   const descontoAplicado = Math.min(Math.max(Number(desconto) || 0, 0), subtotalItens);
   const total = Math.max(0, subtotalItens - descontoAplicado);
@@ -1421,9 +1594,10 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
     const quantidade = Number(qtd);
     setItens((prev) => [
       ...prev,
-      { uidLine: uid(), tipo: src.tipo, itemId: src.id, nome: src.nome, descricao: src.nome, qtd: quantidade, precoUnit: preco, subtotal: preco * quantidade },
+      { uidLine: uid(), tipo: src.tipo, itemId: src.id, nome: src.nome, descricao: descricaoItem.trim() || src.nome, qtd: quantidade, precoUnit: preco, subtotal: preco * quantidade },
     ]);
     setItemSel("");
+    setDescricaoItem("");
     setValorItem("");
     setQtd(1);
   };
@@ -1461,6 +1635,7 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
     if (itens.length === 0 || !clienteId) return;
     if (concluir && hasServico && !funcionarioId) return;
     const cliente = db.clientes.find((c) => c.id === clienteId);
+    const veiculoSelecionado = veiculosDoCliente(cliente).find((veiculo) => veiculo.id === veiculoId) || veiculosDoCliente(cliente)[0] || {};
     const numero = ordemEmEdicao?.numero || (db.ordens.filter((item) => !item.lancamentoManual).length + 1).toString().padStart(4, "0");
     const ordemId = ordemEmEdicao?.id || uid();
     const vendaCarteira = formaPagamento === "Carteira";
@@ -1471,12 +1646,13 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
       data: todayISO(),
       clienteId,
       clienteNome: cliente?.nome || "Consumidor",
-      veiculo: cliente?.veiculo || "",
-      marca: cliente?.marca || "",
-      cor: cliente?.cor || "",
-      ano: cliente?.ano || "",
-      placa: cliente?.placa || "",
-      motorista: cliente?.motorista || "",
+      veiculoId: veiculoSelecionado.id || "",
+      veiculo: veiculoSelecionado.veiculo || "",
+      marca: veiculoSelecionado.marca || "",
+      cor: veiculoSelecionado.cor || "",
+      ano: veiculoSelecionado.ano || "",
+      placa: veiculoSelecionado.placa || "",
+      motorista: veiculoSelecionado.motorista || "",
       itens,
       subtotal: subtotalItens,
       desconto: descontoAplicado,
@@ -1541,7 +1717,7 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
             onClick={() => { setBuscaCliente(""); setSeletorClienteAberto(true); }}
             className={inputCls + " flex items-center justify-between text-left"}
           >
-            <span>{clienteId ? (() => { const cliente = clientesComCodigo.find((item) => item.id === clienteId); return cliente ? `#${cliente.codigoExibicao} · ${cliente.nome}${cliente.placa ? ` · ${cliente.placa}` : ""}` : "Selecionar cliente"; })() : "Selecionar cliente"}</span>
+            <span>{clienteId ? (() => { const cliente = clientesComCodigo.find((item) => item.id === clienteId); return cliente ? `#${cliente.codigoExibicao} · ${cliente.nome}` : "Selecionar cliente"; })() : "Selecionar cliente"}</span>
             <Search size={17} className="text-emerald-700" />
           </button>
         </Field>
@@ -1569,18 +1745,27 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
                     key={cliente.id}
                     onClick={() => {
                       setClienteId(cliente.id);
+                      setVeiculoId(veiculosDoCliente(cliente)[0]?.id || "");
                       setBuscaCliente("");
                       setSeletorClienteAberto(false);
                     }}
                     className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-orange-50 hover:text-orange-700"
                   >
                     <span><strong>#{cliente.codigoExibicao}</strong> · {cliente.nome}</span>
-                    <span className="text-right text-xs text-slate-400">{cliente.placa || cliente.cpfCnpj || ""}{cliente.motorista ? <><br />{cliente.motorista}</> : null}</span>
+                    <span className="text-right text-xs text-slate-400">{veiculosDoCliente(cliente).length ? `${veiculosDoCliente(cliente).length} veículo(s)` : cliente.cpfCnpj || ""}</span>
                   </button>
                 ))}
               </div>
             </div>
           </div>
+        )}
+
+        {veiculosDisponiveis.length > 0 && (
+          <Field label="Veículo desta ordem">
+            <select className={inputCls} value={veiculoId || veiculosDisponiveis[0].id} onChange={(e) => setVeiculoId(e.target.value)}>
+              {veiculosDisponiveis.map((veiculo) => <option key={veiculo.id} value={veiculo.id}>{[veiculo.marca, veiculo.veiculo, veiculo.placa].filter(Boolean).join(" · ") || "Veículo sem identificação"}</option>)}
+            </select>
+          </Field>
         )}
 
         <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 space-y-3">
@@ -1592,6 +1777,7 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
                   const id = e.target.value;
                   const item = catalogo.find((registro) => registro.id === id);
                   setItemSel(id);
+                  setDescricaoItem(item?.nome || "");
                   setValorItem(id ? String(item?.tipo === "servico" ? item?.preco || 0 : item?.precoVenda || item?.precoCusto || 0) : "");
                 }}>
                   <option value="">Selecione...</option>
@@ -1602,6 +1788,11 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
                     </option>
                   ))}
                 </select>
+              </Field>
+            </div>
+            <div className="sm:col-span-3">
+              <Field label="Descrição na OS">
+                <input className={inputCls} disabled={!itemSel} placeholder="Selecione um item e personalize a descrição" value={descricaoItem} onChange={(e) => setDescricaoItem(e.target.value)} />
               </Field>
             </div>
             <Field label="Valor">
@@ -1732,7 +1923,7 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
           <button onClick={() => salvar(false)} disabled={itens.length === 0 || !clienteId} className="w-full rounded-xl border border-emerald-300 bg-white px-5 py-2.5 text-sm font-semibold text-emerald-800 disabled:opacity-40 sm:w-auto">
             Salvar OS
           </button>
-          <button onClick={() => salvar(true)} disabled={itens.length === 0 || !clienteId} className="w-full rounded-xl bg-gradient-to-br from-orange-700 to-emerald-800 px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40 sm:w-auto">
+          <button onClick={() => salvar(true)} disabled={itens.length === 0 || !clienteId} className="w-full rounded-xl px-5 py-2.5 text-sm font-semibold transition hover:opacity-90 disabled:opacity-40 sm:w-auto" style={{ backgroundColor: "#9a3412", color: "#ffffff", border: "1px solid #7c2d12" }}>
             Concluir OS
           </button>
         </div>
@@ -2031,7 +2222,7 @@ function Ordens({ db, update, empresa, onEditarNaOS, embedded = false }) {
           <div className="flex justify-end gap-2">
             <button onClick={() => salvarEdicao(false)} className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700">Salvar alterações</button>
             {["rascunho", "pendente", "estornado"].includes(db.ordens.find((ordem) => ordem.id === editandoOrdemId)?.statusOS) && (
-              <button onClick={() => salvarEdicao(true)} className="rounded-xl bg-orange-700 px-4 py-2.5 text-sm font-semibold text-white">Concluir OS</button>
+              <button onClick={() => salvarEdicao(true)} className="rounded-xl px-4 py-2.5 text-sm font-semibold" style={{ backgroundColor: "#9a3412", color: "#ffffff", border: "1px solid #7c2d12" }}>Concluir OS</button>
             )}
           </div>
         </Card>
@@ -2062,7 +2253,7 @@ function Ordens({ db, update, empresa, onEditarNaOS, embedded = false }) {
                   <td className="px-4 py-3 text-slate-500">{fmtDate(o.data)}</td>
                   <td className="px-4 py-3">{o.clienteNome}</td>
                   <td className="px-4 py-3 text-slate-500">{o.funcionarioNome || "-"}</td>
-                  <td className="px-4 py-3 text-slate-500">{o.itens.map((i) => i.nome).join(", ")}</td>
+                  <td className="px-4 py-3 text-slate-500">{o.itens.map((i) => i.descricao || i.nome).join(", ")}</td>
                   <td className="px-4 py-3 text-right font-semibold">{brl(o.total)}</td>
                   <td className="px-4 py-3">{["rascunho", "pendente", "estornado"].includes(o.statusOS) ? <Badge tone="amber">Pendente</Badge> : <Badge tone="green">Concluído</Badge>}</td>
                   <td className="px-4 py-3">
@@ -2104,20 +2295,36 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
   const clienteFormInicial = {
     tipoPessoa: "fisica", nome: "", cpfCnpj: "", dataNascimento: "", email: "", telefone: "",
     cep: "", endereco: "", numero: "", bairro: "", cidade: "", estado: "",
-    marca: "", veiculo: "", cor: "", ano: "", placa: "", motorista: "",
+    tipoVeiculo: "", marca: "", veiculo: "", cor: "", ano: "", placa: "", motorista: "",
+    veiculos: [],
   };
   const [form, setForm] = useState(clienteFormInicial);
   const [busca, setBusca] = useState("");
+  const [editandoId, setEditandoId] = useState(null);
+  const formularioRef = useRef(null);
 
-  const add = async () => {
+  const salvar = async () => {
     if (!form.nome.trim()) {
       alert("Informe o nome do cliente.");
       return;
     }
-    const proximoCodigo = String(Math.max(0, ...db.clientes.map((cliente) => Number(cliente.codigo) || 0)) + 1).padStart(4, "0");
     try {
       if (!empresaId) throw new Error("Não foi possível identificar a empresa deste cliente.");
-      const cliente = await createCliente({ codigo: proximoCodigo, ...form, empresaId });
+      const temVeiculoPendente = [form.tipoVeiculo, form.marca, form.veiculo, form.cor, form.ano, form.placa, form.motorista].some(Boolean);
+      const veiculos = temVeiculoPendente
+        ? [...form.veiculos, { id: uid(), tipoVeiculo: form.tipoVeiculo, marca: form.marca, veiculo: form.veiculo, cor: form.cor, ano: form.ano, placa: form.placa, motorista: form.motorista }]
+        : form.veiculos;
+      const primeiroVeiculo = veiculos[0] || {};
+      const { id: _veiculoId, ...dadosPrimeiroVeiculo } = primeiroVeiculo;
+      const dadosCliente = { ...form, ...dadosPrimeiroVeiculo, veiculos };
+      if (editandoId) {
+        await update("clientes", (prev) => prev.map((cliente) => cliente.id === editandoId ? { ...cliente, ...dadosCliente } : cliente));
+        setEditandoId(null);
+        setForm(clienteFormInicial);
+        return;
+      }
+      const proximoCodigo = String(Math.max(0, ...db.clientes.map((cliente) => Number(cliente.codigo) || 0)) + 1).padStart(4, "0");
+      const cliente = await createCliente({ codigo: proximoCodigo, ...dadosCliente, empresaId });
       update("clientes", (prev) => [...prev, cliente]);
       setForm(clienteFormInicial);
     } catch (error) {
@@ -2125,15 +2332,33 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
       alert(error.message);
     }
   };
+  const editar = (cliente) => {
+    const dadosFormulario = Object.fromEntries(
+      Object.keys(clienteFormInicial).map((campo) => [campo, cliente[campo] ?? clienteFormInicial[campo]])
+    );
+    dadosFormulario.veiculos = veiculosDoCliente(cliente);
+    ["tipoVeiculo", "marca", "veiculo", "cor", "ano", "placa", "motorista"].forEach((campo) => { dadosFormulario[campo] = ""; });
+    setEditandoId(cliente.id);
+    setForm(dadosFormulario);
+    formularioRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  const cancelarEdicao = () => {
+    setEditandoId(null);
+    setForm(clienteFormInicial);
+  };
   const mostraCamposVeiculo = (empresaSegmento || "lava-jato").toLowerCase() === "lava-jato";
+  const adicionarVeiculo = () => {
+    if (![form.tipoVeiculo, form.marca, form.veiculo, form.cor, form.ano, form.placa, form.motorista].some(Boolean)) return;
+    const novo = { id: uid(), tipoVeiculo: form.tipoVeiculo, marca: form.marca, veiculo: form.veiculo, cor: form.cor, ano: form.ano, placa: form.placa, motorista: form.motorista };
+    setForm((anterior) => ({ ...anterior, veiculos: [...anterior.veiculos, novo], tipoVeiculo: "", marca: "", veiculo: "", cor: "", ano: "", placa: "", motorista: "" }));
+  };
   const remove = (id) => update("clientes", (prev) => prev.filter((c) => c.id !== id));
 
   const lista = db.clientes.filter((c) => {
     const termo = busca.toLowerCase();
     return c.nome.toLowerCase().includes(termo)
       || (c.cpfCnpj || "").toLowerCase().includes(termo)
-      || (c.placa || "").toLowerCase().includes(termo)
-      || (c.motorista || "").toLowerCase().includes(termo);
+      || veiculosDoCliente(c).some((veiculo) => (veiculo.placa || "").toLowerCase().includes(termo) || (veiculo.motorista || "").toLowerCase().includes(termo));
   });
 
   return (
@@ -2143,6 +2368,7 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
         <p className="text-slate-500 text-sm mt-1">Cadastre clientes e seus veículos.</p>
       </header>
 
+      <div ref={formularioRef}>
       <Card className="p-5">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
           <Field label="Tipo de pessoa">
@@ -2169,6 +2395,17 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
                 <p className="text-xs text-slate-500">Identificação do carro e da pessoa responsável por levá-lo ao lava-jato.</p>
               </div>
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                <Field label="Tipo de veículo">
+                  <select className={inputCls} value={form.tipoVeiculo} onChange={(e) => setForm({ ...form, tipoVeiculo: e.target.value })}>
+                    <option value="">Selecionar tipo</option>
+                    <option value="carro">Carro</option>
+                    <option value="moto">Moto</option>
+                    <option value="caminhao">Caminhão</option>
+                    <option value="van">Van</option>
+                    <option value="utilitario">Utilitário</option>
+                    <option value="outro">Outro</option>
+                  </select>
+                </Field>
                 <Field label="Marca"><input className={inputCls} placeholder="Ex.: Toyota" value={form.marca} onChange={(e) => setForm({ ...form, marca: e.target.value })} /></Field>
                 <Field label="Modelo"><input className={inputCls} placeholder="Ex.: Corolla" value={form.veiculo} onChange={(e) => setForm({ ...form, veiculo: e.target.value })} /></Field>
                 <Field label="Cor"><input className={inputCls} placeholder="Ex.: Prata" value={form.cor} onChange={(e) => setForm({ ...form, cor: e.target.value })} /></Field>
@@ -2176,11 +2413,27 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
                 <Field label="Placa"><input maxLength={8} className={inputCls} placeholder="Ex.: ABC1D23" value={form.placa} onChange={(e) => setForm({ ...form, placa: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 7) })} /></Field>
                 <Field label="Motorista/Responsável"><input className={inputCls} placeholder="Quem costuma levar o veículo?" value={form.motorista} onChange={(e) => setForm({ ...form, motorista: e.target.value })} /></Field>
               </div>
+              <button type="button" onClick={adicionarVeiculo} className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-50"><Plus size={15} /> Adicionar veículo à lista</button>
+              {form.veiculos.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  <div className="text-xs font-semibold uppercase text-slate-500">Veículos cadastrados ({form.veiculos.length})</div>
+                  {form.veiculos.map((veiculo, index) => (
+                    <div key={veiculo.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+                      <span><strong>{index + 1}.</strong> {[veiculo.marca, veiculo.veiculo, veiculo.placa].filter(Boolean).join(" · ") || "Veículo sem identificação"}{veiculo.motorista ? ` · ${veiculo.motorista}` : ""}</span>
+                      <button type="button" onClick={() => setForm((anterior) => ({ ...anterior, veiculos: anterior.veiculos.filter((item) => item.id !== veiculo.id) }))} className="ml-3 text-slate-400 hover:text-red-500" title="Remover veículo"><Trash2 size={15} /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
-        <button onClick={add} className="mt-3 flex items-center gap-1.5 text-sm font-semibold text-emerald-800"><Plus size={16} /> Adicionar cliente</button>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <button onClick={salvar} className="flex items-center gap-1.5 text-sm font-semibold text-emerald-800">{editandoId ? <Pencil size={16} /> : <Plus size={16} />} {editandoId ? "Salvar alterações" : "Adicionar cliente"}</button>
+          {editandoId && <button type="button" onClick={cancelarEdicao} className="text-sm font-semibold text-slate-500 hover:text-slate-800">Cancelar</button>}
+        </div>
       </Card>
+      </div>
 
       <div className="relative max-w-xs">
         <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -2204,13 +2457,17 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
                   {mostraCamposVeiculo && (
                     <>
                       <td className="px-4 py-3 text-slate-500">
-                        <div>{[c.marca, c.veiculo].filter(Boolean).join(" ") || "-"}</div>
-                        {(c.cor || c.ano || c.placa) && <div className="mt-0.5 text-xs text-slate-400">{[c.cor, c.ano, c.placa].filter(Boolean).join(" · ")}</div>}
+                        {veiculosDoCliente(c).length ? veiculosDoCliente(c).map((veiculo) => <div key={veiculo.id} className="mb-1 last:mb-0">{[veiculo.marca, veiculo.veiculo, veiculo.placa].filter(Boolean).join(" · ") || "Veículo sem identificação"}</div>) : "-"}
                       </td>
-                      <td className="px-4 py-3 text-slate-500">{c.motorista || "-"}</td>
+                      <td className="px-4 py-3 text-slate-500">{veiculosDoCliente(c).map((veiculo) => veiculo.motorista).filter(Boolean).join(", ") || "-"}</td>
                     </>
                   )}
-                  <td className="px-4 py-3 text-right"><button onClick={() => remove(c.id)} className="text-slate-400 hover:text-red-500"><Trash2 size={16} /></button></td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex justify-end gap-3">
+                      <button type="button" onClick={() => editar(c)} className="text-slate-400 hover:text-emerald-700" title="Editar cliente"><Pencil size={16} /></button>
+                      <button type="button" onClick={() => remove(c.id)} className="text-slate-400 hover:text-red-500" title="Excluir cliente"><Trash2 size={16} /></button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -2254,14 +2511,23 @@ function ProdutosServicos({ db, update }) {
 }
 
 function Servicos({ db, update, embedded = false }) {
-  const [form, setForm] = useState({ nome: "", preco: "" });
+  const [form, setForm] = useState({ nome: "", preco: "", diasRetornoSugerido: "" });
   const add = () => {
     if (!form.nome.trim() || form.preco === "") return;
-    update("servicos", (prev) => [...prev, { id: uid(), nome: form.nome, preco: Number(form.preco) }]);
-    setForm({ nome: "", preco: "" });
+    update("servicos", (prev) => [...prev, {
+      id: uid(),
+      nome: form.nome,
+      preco: Number(form.preco),
+      diasRetornoSugerido: form.diasRetornoSugerido === "" ? null : Math.max(1, Number(form.diasRetornoSugerido)),
+    }]);
+    setForm({ nome: "", preco: "", diasRetornoSugerido: "" });
   };
   const remove = (id) => update("servicos", (prev) => prev.filter((s) => s.id !== id));
   const editarPreco = (id, preco) => update("servicos", (prev) => prev.map((s) => (s.id === id ? { ...s, preco: Number(preco) } : s)));
+  const editarRetorno = (id, dias) => update("servicos", (prev) => prev.map((s) => (s.id === id ? {
+    ...s,
+    diasRetornoSugerido: dias === "" ? null : Math.max(1, Number(dias)),
+  } : s)));
 
   return (
     <div className="space-y-6">
@@ -2271,23 +2537,30 @@ function Servicos({ db, update, embedded = false }) {
       </header>}
 
       <Card className="p-5">
-        <div className="grid grid-cols-1 sm:grid-cols-[1fr_180px] gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_180px_210px]">
           <Field label="Nome do serviço"><input className={inputCls} value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} /></Field>
           <Field label="Preço"><input type="number" className={inputCls} value={form.preco} onChange={(e) => setForm({ ...form, preco: e.target.value })} /></Field>
+          <Field label="Retorno sugerido (dias)"><input type="number" min="1" className={inputCls} value={form.diasRetornoSugerido} onChange={(e) => setForm({ ...form, diasRetornoSugerido: e.target.value })} placeholder="Opcional" /></Field>
         </div>
         <button onClick={add} className="mt-3 flex items-center gap-1.5 text-sm font-semibold text-emerald-800"><Plus size={16} /> Adicionar serviço</button>
       </Card>
 
-      <Card className="p-0 overflow-hidden">
+      <Card className="overflow-x-auto p-0">
         {db.servicos.length === 0 ? <EmptyState text="Nenhum serviço cadastrado." /> : (
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-slate-500 text-xs uppercase"><tr><th className="text-left px-4 py-3">Serviço</th><th className="text-left px-4 py-3">Preço</th><th className="px-4 py-3"></th></tr></thead>
+            <thead className="bg-slate-50 text-slate-500 text-xs uppercase"><tr><th className="text-left px-4 py-3">Serviço</th><th className="text-left px-4 py-3">Preço</th><th className="text-left px-4 py-3">Retorno sugerido</th><th className="px-4 py-3"></th></tr></thead>
             <tbody className="divide-y divide-slate-100">
               {db.servicos.map((s) => (
                 <tr key={s.id}>
                   <td className="px-4 py-3 font-medium">{s.nome}</td>
                   <td className="px-4 py-3">
                     <input type="number" className="w-28 rounded-lg border border-slate-300 px-2 py-1 text-sm" value={s.preco} onChange={(e) => editarPreco(s.id, e.target.value)} />
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <input type="number" min="1" className="w-24 rounded-lg border border-slate-300 px-2 py-1 text-sm" value={s.diasRetornoSugerido ?? ""} onChange={(e) => editarRetorno(s.id, e.target.value)} placeholder="-" />
+                      <span className="text-xs text-slate-400">dias</span>
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-right"><button onClick={() => remove(s.id)} className="text-slate-400 hover:text-red-500"><Trash2 size={16} /></button></td>
                 </tr>
@@ -2660,10 +2933,10 @@ function ContasReceber({ db, update, empresa }) {
             <Field label="Valor da baixa">
               <input type="number" min="0" className={inputCls} value={baixa.valor} onChange={(e) => setBaixa((prev) => ({ ...prev, valor: e.target.value }))} />
             </Field>
-            <Field label="Data da baixa">
+            <Field label="Data do pagamento">
               <input type="date" className={inputCls} value={baixa.data} onChange={(e) => setBaixa((prev) => ({ ...prev, data: e.target.value }))} />
             </Field>
-            <Field label="Forma de baixa">
+            <Field label="Forma de pagamento">
               <select className={inputCls} value={baixa.formaPagamento} onChange={(e) => setBaixa((prev) => ({ ...prev, formaPagamento: e.target.value }))}>
                 <option>Dinheiro</option>
                 <option>Pix</option>
@@ -2684,7 +2957,7 @@ function ContasReceber({ db, update, empresa }) {
         {pendentes.length === 0 ? <EmptyState text="Nenhuma conta a receber no momento." /> : (
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
-              <tr><th className="text-left px-4 py-3">OS</th><th className="text-left px-4 py-3">Cliente</th><th className="text-left px-4 py-3">Vencimento</th><th className="text-right px-4 py-3">Valor pendente</th><th className="text-left px-4 py-3">Baixa</th><th className="text-left px-4 py-3">Status</th><th className="px-4 py-3"></th></tr>
+              <tr><th className="text-left px-4 py-3">OS</th><th className="text-left px-4 py-3">Cliente</th><th className="text-left px-4 py-3">Vencimento</th><th className="text-right px-4 py-3">Valor da conta</th><th className="text-right px-4 py-3">Valor pendente</th><th className="text-left px-4 py-3">Data do pagamento</th><th className="text-left px-4 py-3">Status</th><th className="px-4 py-3"></th></tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {pendentes.map((o) => {
@@ -2704,6 +2977,7 @@ function ContasReceber({ db, update, empresa }) {
                         onChange={(e) => atualizarVencimento(o.id, e.target.value)}
                       />
                     </td>
+                    <td className="px-4 py-3 text-right font-medium text-slate-700">{brl(Number(o.valorParcela ?? o.total ?? 0))}</td>
                     <td className="px-4 py-3 text-right font-semibold">{brl(Math.max(0, Number(o.valorParcela || 0) - Number(o.valorPago || 0)))}</td>
                     <td className="px-4 py-3 text-slate-500">{o.dataBaixa ? fmtDate(o.dataBaixa) : "-"}</td>
                     <td className="px-4 py-3">{vencida ? <Badge tone="red">Vencida</Badge> : <StatusBadge status={o.statusPagamento} />}</td>
