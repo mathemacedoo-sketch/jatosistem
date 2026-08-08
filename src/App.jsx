@@ -1503,6 +1503,7 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
   const [seletorClienteAberto, setSeletorClienteAberto] = useState(false);
   const [itens, setItens] = useState([]);
   const [itemSel, setItemSel] = useState("");
+  const [descricaoItem, setDescricaoItem] = useState("");
   const [valorItem, setValorItem] = useState("");
   const [qtd, setQtd] = useState(1);
   const [formaPagamento, setFormaPagamento] = useState("Dinheiro");
@@ -1559,9 +1560,10 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
     const quantidade = Number(qtd);
     setItens((prev) => [
       ...prev,
-      { uidLine: uid(), tipo: src.tipo, itemId: src.id, nome: src.nome, descricao: src.nome, qtd: quantidade, precoUnit: preco, subtotal: preco * quantidade },
+      { uidLine: uid(), tipo: src.tipo, itemId: src.id, nome: src.nome, descricao: descricaoItem.trim() || src.nome, qtd: quantidade, precoUnit: preco, subtotal: preco * quantidade },
     ]);
     setItemSel("");
+    setDescricaoItem("");
     setValorItem("");
     setQtd(1);
   };
@@ -1741,6 +1743,7 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
                   const id = e.target.value;
                   const item = catalogo.find((registro) => registro.id === id);
                   setItemSel(id);
+                  setDescricaoItem(item?.nome || "");
                   setValorItem(id ? String(item?.tipo === "servico" ? item?.preco || 0 : item?.precoVenda || item?.precoCusto || 0) : "");
                 }}>
                   <option value="">Selecione...</option>
@@ -1751,6 +1754,11 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
                     </option>
                   ))}
                 </select>
+              </Field>
+            </div>
+            <div className="sm:col-span-3">
+              <Field label="Descrição na OS">
+                <input className={inputCls} disabled={!itemSel} placeholder="Selecione um item e personalize a descrição" value={descricaoItem} onChange={(e) => setDescricaoItem(e.target.value)} />
               </Field>
             </div>
             <Field label="Valor">
