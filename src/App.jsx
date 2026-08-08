@@ -2281,7 +2281,8 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
         ? [...form.veiculos, { id: uid(), tipoVeiculo: form.tipoVeiculo, marca: form.marca, veiculo: form.veiculo, cor: form.cor, ano: form.ano, placa: form.placa, motorista: form.motorista }]
         : form.veiculos;
       const primeiroVeiculo = veiculos[0] || {};
-      const dadosCliente = { ...form, ...primeiroVeiculo, veiculos };
+      const { id: _veiculoId, ...dadosPrimeiroVeiculo } = primeiroVeiculo;
+      const dadosCliente = { ...form, ...dadosPrimeiroVeiculo, veiculos };
       if (editandoId) {
         await update("clientes", (prev) => prev.map((cliente) => cliente.id === editandoId ? { ...cliente, ...dadosCliente } : cliente));
         setEditandoId(null);
