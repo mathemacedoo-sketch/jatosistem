@@ -2899,10 +2899,10 @@ function ContasReceber({ db, update, empresa }) {
             <Field label="Valor da baixa">
               <input type="number" min="0" className={inputCls} value={baixa.valor} onChange={(e) => setBaixa((prev) => ({ ...prev, valor: e.target.value }))} />
             </Field>
-            <Field label="Data da baixa">
+            <Field label="Data do pagamento">
               <input type="date" className={inputCls} value={baixa.data} onChange={(e) => setBaixa((prev) => ({ ...prev, data: e.target.value }))} />
             </Field>
-            <Field label="Forma de baixa">
+            <Field label="Forma de pagamento">
               <select className={inputCls} value={baixa.formaPagamento} onChange={(e) => setBaixa((prev) => ({ ...prev, formaPagamento: e.target.value }))}>
                 <option>Dinheiro</option>
                 <option>Pix</option>
@@ -2923,7 +2923,7 @@ function ContasReceber({ db, update, empresa }) {
         {pendentes.length === 0 ? <EmptyState text="Nenhuma conta a receber no momento." /> : (
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
-              <tr><th className="text-left px-4 py-3">OS</th><th className="text-left px-4 py-3">Cliente</th><th className="text-left px-4 py-3">Vencimento</th><th className="text-right px-4 py-3">Valor da conta</th><th className="text-right px-4 py-3">Valor pendente</th><th className="text-left px-4 py-3">Baixa</th><th className="text-left px-4 py-3">Status</th><th className="px-4 py-3"></th></tr>
+              <tr><th className="text-left px-4 py-3">OS</th><th className="text-left px-4 py-3">Cliente</th><th className="text-left px-4 py-3">Vencimento</th><th className="text-right px-4 py-3">Valor da conta</th><th className="text-right px-4 py-3">Valor pendente</th><th className="text-left px-4 py-3">Data do pagamento</th><th className="text-left px-4 py-3">Status</th><th className="px-4 py-3"></th></tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {pendentes.map((o) => {
