@@ -248,7 +248,7 @@ const clientesParaRetorno = (db, hoje = todayISO()) => {
       cliente,
       ordem,
       servico,
-      nomeServico: servico.nome || item.descricao || item.nome || "Serviço",
+      nomeServico: item.descricao || servico.nome || item.nome || "Serviço",
       ultimoAtendimento: ordem.data,
       retornoPrevisto,
       diasDesdeUltimoAtendimento: hojeNumero - dayNumber(ordem.data),
@@ -2219,7 +2219,7 @@ function Ordens({ db, update, empresa, onEditarNaOS, embedded = false }) {
                   <td className="px-4 py-3 text-slate-500">{fmtDate(o.data)}</td>
                   <td className="px-4 py-3">{o.clienteNome}</td>
                   <td className="px-4 py-3 text-slate-500">{o.funcionarioNome || "-"}</td>
-                  <td className="px-4 py-3 text-slate-500">{o.itens.map((i) => i.nome).join(", ")}</td>
+                  <td className="px-4 py-3 text-slate-500">{o.itens.map((i) => i.descricao || i.nome).join(", ")}</td>
                   <td className="px-4 py-3 text-right font-semibold">{brl(o.total)}</td>
                   <td className="px-4 py-3">{["rascunho", "pendente", "estornado"].includes(o.statusOS) ? <Badge tone="amber">Pendente</Badge> : <Badge tone="green">Concluído</Badge>}</td>
                   <td className="px-4 py-3">
