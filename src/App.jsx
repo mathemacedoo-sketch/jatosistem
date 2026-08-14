@@ -57,6 +57,7 @@ const addDays = (date, days) => {
   return new Date((base + Number(days || 0)) * 86400000).toISOString().slice(0, 10);
 };
 const monthKey = (d) => (d || "").slice(0, 7);
+const DEFAULT_ADMIN_USERNAME = "admin";
 const DEFAULT_ADMIN_PASSWORD = "admin";
 
 const onlyDigits = (value = "") => value.replace(/\D/g, "");
@@ -195,6 +196,14 @@ const createUsuario = ({ nome, usuario, senha, empresaId, perfil = "usuario" }) 
   senha,
   empresaId,
   perfil,
+});
+
+const createDefaultCompanyAdmin = (empresa) => createUsuario({
+  nome: "Administrador",
+  usuario: DEFAULT_ADMIN_USERNAME,
+  senha: DEFAULT_ADMIN_PASSWORD,
+  empresaId: empresa.id,
+  perfil: "gerente",
 });
 
 const createFuncionario = ({ nome, cargo = "Funcionário", empresaId }) => ({
@@ -469,6 +478,17 @@ export default function App() {
             item.empresaId ? item : { ...item, empresaId: legacyCompanyId }
           );
         });
+        const companyIdsWithAdmin = new Set(
+          (initialData.usuarios || [])
+            .filter((usuario) => String(usuario.usuario || "").trim().toLowerCase() === DEFAULT_ADMIN_USERNAME)
+            .map((usuario) => usuario.empresaId)
+        );
+        const missingCompanyAdmins = (initialData.empresas || [])
+          .filter((empresa) => !companyIdsWithAdmin.has(empresa.id))
+          .map((empresa) => createDefaultCompanyAdmin(empresa));
+        if (missingCompanyAdmins.length) {
+          initialData.usuarios = [...(initialData.usuarios || []), ...missingCompanyAdmins];
+        }
         lastSynced.current = remoteInitialized ? initialData : {
           ...initialData,
           empresas: [],
@@ -590,7 +610,12 @@ export default function App() {
   const podeAcessar = (tabId) => isMaster || isGerente || tabsUsuario.includes(tabId);
 
   const entrar = () => {
-    const user = usuarios.find((u) => u.usuario === auth.usuario && u.senha === auth.senha);
+    const isDefaultAdmin = auth.usuario.trim().toLowerCase() === DEFAULT_ADMIN_USERNAME;
+    const user = usuarios.find((u) =>
+      u.usuario === auth.usuario
+      && u.senha === auth.senha
+      && (!isDefaultAdmin || u.empresaId === auth.empresaId)
+    );
     if (!user) return;
     const empresaId = user.empresaId || (auth.empresaId || empresas[0]?.id || "");
     setAuth((prev) => ({ ...prev, empresaId, usuarioLogado: user }));
@@ -752,6 +777,7 @@ export default function App() {
 
 function LoginScreen({ auth, setAuth, entrar, db }) {
   const [erro, setErro] = useState("");
+  const isDefaultAdmin = auth.usuario.trim().toLowerCase() === DEFAULT_ADMIN_USERNAME;
   return (
     <div className="login-shell min-h-screen flex items-center justify-center p-6">
       <Card className="w-full max-w-md p-6 space-y-4">
@@ -772,8 +798,14 @@ function LoginScreen({ auth, setAuth, entrar, db }) {
         <Field label="Senha">
           <input type="password" className={inputCls} value={auth.senha} onChange={(e) => setAuth((prev) => ({ ...prev, senha: e.target.value }))} />
         </Field>
+        {isDefaultAdmin && <Field label="Empresa">
+          <select className={inputCls} value={auth.empresaId} onChange={(e) => setAuth((prev) => ({ ...prev, empresaId: e.target.value }))}>
+            <option value="">Selecione a empresa</option>
+            {(db.empresas || []).map((empresa) => <option key={empresa.id} value={empresa.id}>{empresa.nome}</option>)}
+          </select>
+        </Field>}
         {erro && <div className="text-sm text-red-600">{erro}</div>}
-        <button onClick={() => { const user = (db.usuarios || []).find((u) => u.usuario === auth.usuario && u.senha === auth.senha); if (!user) { setErro("Usuário ou senha inválidos."); return; } setErro(""); entrar(); }} className="w-full rounded-xl font-semibold py-2.5" style={{ backgroundColor: "#9a3412", color: "#ffffff", border: "1px solid #7c2d12" }}>Entrar no MM ERP</button>
+        <button onClick={() => { const user = (db.usuarios || []).find((u) => u.usuario === auth.usuario && u.senha === auth.senha && (!isDefaultAdmin || u.empresaId === auth.empresaId)); if (!user) { setErro(isDefaultAdmin && !auth.empresaId ? "Selecione a empresa." : "Usuário ou senha inválidos."); return; } setErro(""); entrar(); }} className="w-full rounded-xl font-semibold py-2.5" style={{ backgroundColor: "#9a3412", color: "#ffffff", border: "1px solid #7c2d12" }}>Entrar no MM ERP</button>
         <p className="text-center text-[11px] text-slate-400">Desenvolvido e mantido por <strong className="font-semibold text-slate-500">MM Tecnologia</strong></p>
       </Card>
     </div>
@@ -791,7 +823,7 @@ function EmpresasScreen({ db, update }) {
   const [segmentoEditandoId, setSegmentoEditandoId] = useState(null);
   const [segmentoEditado, setSegmentoEditado] = useState("lava-jato");
 
-  const add = () => {
+  const add = async () => {
     if (!form.nome.trim()) return;
     if (editandoId) {
       update("empresas", (prev) => prev.map((empresa) => empresa.id === editandoId ? { ...empresa, ...form } : empresa));
@@ -800,7 +832,8 @@ function EmpresasScreen({ db, update }) {
       return;
     }
     const empresa = createEmpresa(form);
-    update("empresas", (prev) => [...prev, empresa]);
+    await update("empresas", (prev) => [...prev, empresa]);
+    await update("usuarios", (prev) => [...prev, createDefaultCompanyAdmin(empresa)]);
     setForm(empresaFormInicial);
   };
 
@@ -829,7 +862,7 @@ function EmpresasScreen({ db, update }) {
     <div className="space-y-6">
       <header>
         <h1 className="headline text-2xl font-bold text-slate-900">Empresas</h1>
-        <p className="text-slate-500 text-sm mt-1">Cadastre os dados da empresa. Os acessos são criados na tela de usuários.</p>
+        <p className="text-slate-500 text-sm mt-1">Ao cadastrar uma empresa, o acesso administrativo padrão é criado automaticamente.</p>
       </header>
 
       <Card className="p-5 space-y-4">
@@ -931,8 +964,10 @@ function UsuariosScreen({ db, update, isMaster, empresaId }) {
       setErroSalvar("Preencha nome, usuário e senha.");
       return;
     }
+    const targetEmpresaId = isMaster ? (empresaSelecionadaValida || form.empresaId) : empresaId;
     const usuarioDuplicado = (db.usuarios || []).some(
       (usuario) => usuario.id !== editandoId
+        && (form.usuario.trim().toLowerCase() !== DEFAULT_ADMIN_USERNAME || usuario.empresaId === targetEmpresaId)
         && usuario.usuario.trim().toLowerCase() === form.usuario.trim().toLowerCase()
     );
     if (usuarioDuplicado) {
@@ -940,7 +975,6 @@ function UsuariosScreen({ db, update, isMaster, empresaId }) {
       return;
     }
     if (!isMaster && form.perfil === "master") return;
-    const targetEmpresaId = isMaster ? (empresaSelecionadaValida || form.empresaId) : empresaId;
     setSalvando(true);
     setErroSalvar("");
     try {
