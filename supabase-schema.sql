@@ -34,6 +34,7 @@ alter table public.clientes
   add column if not exists tipo_veiculo text,
   add column if not exists marca text,
   add column if not exists veiculo text,
+  add column if not exists frota text,
   add column if not exists cor text,
   add column if not exists ano text,
   add column if not exists placa text,
@@ -51,10 +52,11 @@ set veiculos = jsonb_build_array(jsonb_build_object(
   'cor', coalesce(cor, ''),
   'ano', coalesce(ano, ''),
   'placa', coalesce(placa, ''),
+  'frota', coalesce(frota, ''),
   'motorista', coalesce(motorista, '')
 ))
 where (veiculos is null or veiculos = '[]'::jsonb)
-  and coalesce(tipo_veiculo, marca, veiculo, cor, ano, placa, motorista) is not null;
+  and coalesce(tipo_veiculo, marca, veiculo, cor, ano, placa, frota, motorista) is not null;
 
 create index if not exists sistema_registros_ativos_idx
   on public.sistema_registros (modulo, empresa_id)
