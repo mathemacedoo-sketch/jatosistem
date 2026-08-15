@@ -62,19 +62,15 @@ create index if not exists sistema_registros_ativos_idx
   on public.sistema_registros (modulo, empresa_id)
   where dt_exc is null;
 
--- A Agenda segue o modelo genérico atual: cada agendamento é um registro do
--- módulo "agendamentos". Estes índices aceleram período, cliente e responsável.
-create index if not exists agendamentos_empresa_inicio_idx
-  on public.sistema_registros (empresa_id, ((dados->>'data')::date), (dados->>'horaInicio'))
-  where modulo = 'agendamentos' and dt_exc is null;
+-- A Agenda lê diretamente as Ordens de Serviço programadas; não existe uma
+-- segunda entidade de agendamento. O índice acelera a busca por empresa/data.
+drop index if exists public.agendamentos_empresa_inicio_idx;
+drop index if exists public.agendamentos_empresa_cliente_idx;
+drop index if exists public.agendamentos_empresa_responsavel_idx;
 
-create index if not exists agendamentos_empresa_cliente_idx
-  on public.sistema_registros (empresa_id, (dados->>'clienteId'))
-  where modulo = 'agendamentos' and dt_exc is null;
-
-create index if not exists agendamentos_empresa_responsavel_idx
-  on public.sistema_registros (empresa_id, (dados->>'responsavelId'))
-  where modulo = 'agendamentos' and dt_exc is null;
+create index if not exists ordens_empresa_programacao_idx
+  on public.sistema_registros (empresa_id, (dados->>'dataProgramada'), (dados->>'horaInicio'))
+  where modulo = 'ordens' and dt_exc is null and dados->>'dataProgramada' is not null;
 
 create index if not exists clientes_ativos_idx
   on public.clientes (empresa_id)

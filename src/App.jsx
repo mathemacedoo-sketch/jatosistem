@@ -59,6 +59,12 @@ const addDays = (date, days) => {
   return new Date((base + Number(days || 0)) * 86400000).toISOString().slice(0, 10);
 };
 const monthKey = (d) => (d || "").slice(0, 7);
+const timeToMinutes = (time = "00:00") => {
+  const [hours, minutes] = time.split(":").map(Number);
+  return hours * 60 + minutes;
+};
+const confirmarExclusao = (descricao = "este registro") =>
+  window.confirm(`Deseja realmente excluir ${descricao}? Esta ação não poderá ser desfeita.`);
 const DEFAULT_ADMIN_USERNAME = "admin";
 const DEFAULT_ADMIN_PASSWORD = "admin";
 
@@ -224,7 +230,6 @@ const getEmpresaData = (db, empresaId) => ({
   ordens: (db.ordens || []).filter((item) => item.empresaId === empresaId),
   contasPagar: (db.contasPagar || []).filter((item) => item.empresaId === empresaId),
   contatosRetorno: (db.contatosRetorno || []).filter((item) => item.empresaId === empresaId),
-  agendamentos: (db.agendamentos || []).filter((item) => item.empresaId === empresaId),
 });
 
 const clientesParaRetorno = (db, hoje = todayISO()) => {
@@ -366,7 +371,6 @@ const SEED = {
   ordens: [],
   contasPagar: [],
   contatosRetorno: [],
-  agendamentos: [],
 };
 
 const STORAGE_KEY = "jato_sistem_db_v1";
@@ -428,6 +432,7 @@ export default function App() {
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState("login");
   const [ordemEmEdicao, setOrdemEmEdicao] = useState(null);
+  const [programacaoOS, setProgramacaoOS] = useState(null);
   const [auth, setAuth] = useState({ usuario: "", senha: "", empresaId: "", usuarioLogado: null });
   const lastSynced = useRef(SEED);
   const dbRef = useRef(SEED);
@@ -477,7 +482,7 @@ export default function App() {
           ordens: (initialData.ordens || []).map((ordem) => ordem.clienteNome === "Cliente Avulso" ? { ...ordem, clienteNome: "Consumidor" } : ordem),
         };
         const legacyCompanyId = initialData.empresas[0]?.id || empresaAdmId;
-        ["usuarios", "clientes", "funcionarios", "servicos", "produtos", "ordens", "contasPagar", "contatosRetorno", "agendamentos"].forEach((collection) => {
+        ["usuarios", "clientes", "funcionarios", "servicos", "produtos", "ordens", "contasPagar", "contatosRetorno"].forEach((collection) => {
           initialData[collection] = (initialData[collection] || []).map((item) =>
             item.empresaId ? item : { ...item, empresaId: legacyCompanyId }
           );
@@ -503,7 +508,6 @@ export default function App() {
           ordens: [],
           contasPagar: [],
           contatosRetorno: [],
-          agendamentos: [],
         };
         if (!active) return;
         dbRef.current = initialData;
@@ -767,8 +771,8 @@ export default function App() {
       <main ref={mainRef} onScroll={saveScrollPosition} className="app-main flex-1 min-w-0 overflow-y-auto">
         <div className="max-w-7xl mx-auto p-6 md:p-8">
           {tab === "dashboard" && podeAcessar("dashboard") && <Dashboard db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} stats={stats} update={update} authUser={authUser} />}
-          {tab === "agenda" && podeAcessar("agenda") && <Agenda db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresaId={auth.empresaId || auth.usuarioLogado?.empresaId || ""} />}
-          {tab === "ordens" && <OrdensWorkspace db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresa={empresaAtiva} ordemEmEdicao={ordemEmEdicao} setOrdemEmEdicao={setOrdemEmEdicao} podeEditarValor={isMaster || isGerente} />}
+          {tab === "agenda" && podeAcessar("agenda") && <Agenda db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} onCreateOS={(programacao) => { setOrdemEmEdicao(null); setProgramacaoOS(programacao); setTab("ordens"); }} onOpenOS={(ordem) => { setProgramacaoOS(null); setOrdemEmEdicao(ordem); setTab("ordens"); }} />}
+          {tab === "ordens" && <OrdensWorkspace db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresa={empresaAtiva} ordemEmEdicao={ordemEmEdicao} setOrdemEmEdicao={setOrdemEmEdicao} programacaoInicial={programacaoOS} setProgramacaoInicial={setProgramacaoOS} podeEditarValor={isMaster || isGerente} />}
           {tab === "clientes" && <Clientes db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresaId={auth.empresaId || auth.usuarioLogado?.empresaId || ""} empresaSegmento={empresaAtiva?.segmento || "lava-jato"} />}
           {tab === "funcionarios" && podeAcessar("funcionarios") && <FuncionariosScreen db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresaId={auth.empresaId || auth.usuarioLogado?.empresaId || ""} />}
           {tab === "catalogo" && podeAcessar("catalogo") && <ProdutosServicos db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} />}
@@ -1111,7 +1115,10 @@ function FuncionariosScreen({ db, update, empresaId }) {
     setForm({ nome: funcionario.nome, cargo: funcionario.cargo || "" });
   };
 
-  const remove = (id) => update("funcionarios", (prev) => prev.filter((funcionario) => funcionario.id !== id));
+  const remove = (id) => {
+    if (!confirmarExclusao("este funcionário")) return;
+    update("funcionarios", (prev) => prev.filter((funcionario) => funcionario.id !== id));
+  };
 
   const lista = (db.funcionarios || []).filter((funcionario) => !funcionario.empresaId || funcionario.empresaId === empresaId);
 
@@ -1496,7 +1503,7 @@ function BaixaFinanceiraModal({ titulo, referencia, baixa, setBaixa, onConfirmar
 }
 
 // ---------- Ordens de servico (cadastro + historico) ----------
-function OrdensWorkspace({ db, update, empresa, ordemEmEdicao, setOrdemEmEdicao, podeEditarValor }) {
+function OrdensWorkspace({ db, update, empresa, ordemEmEdicao, setOrdemEmEdicao, programacaoInicial, setProgramacaoInicial, podeEditarValor }) {
   const [modo, setModo] = useState("formulario");
   const [formKey, setFormKey] = useState(0);
   const ordens = (db.ordens || []).filter((ordem) => !ordem.lancamentoManual);
@@ -1504,6 +1511,7 @@ function OrdensWorkspace({ db, update, empresa, ordemEmEdicao, setOrdemEmEdicao,
 
   const abrirNova = () => {
     setOrdemEmEdicao(null);
+    setProgramacaoInicial(null);
     setFormKey((value) => value + 1);
     setModo("formulario");
   };
@@ -1543,8 +1551,10 @@ function OrdensWorkspace({ db, update, empresa, ordemEmEdicao, setOrdemEmEdicao,
           update={update}
           empresa={empresa}
           ordemEmEdicao={ordemEmEdicao}
+          programacaoInicial={programacaoInicial}
           onFinalizarEdicao={(concluir) => {
             setOrdemEmEdicao(null);
+            setProgramacaoInicial(null);
             if (!concluir) setModo("lista");
           }}
           onConcluirFechado={() => setModo("lista")}
@@ -1560,7 +1570,7 @@ function OrdensWorkspace({ db, update, empresa, ordemEmEdicao, setOrdemEmEdicao,
 }
 
 // ---------- Nova OS ----------
-function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcluirFechado, podeEditarValor, embedded = false }) {
+function NovaOS({ db, update, empresa, ordemEmEdicao, programacaoInicial, onFinalizarEdicao, onConcluirFechado, podeEditarValor, embedded = false }) {
   const [clienteId, setClienteId] = useState(db.clientes[0]?.id || "");
   const [veiculoId, setVeiculoId] = useState("");
   const [dadosVeiculo, setDadosVeiculo] = useState({ tipoVeiculo: "", marca: "", veiculo: "", cor: "", ano: "", placa: "", frota: "", motorista: "" });
@@ -1581,6 +1591,10 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
   const [editandoItem, setEditandoItem] = useState(null);
   const [editForm, setEditForm] = useState({ descricao: "", valor: "", qtd: "" });
   const [recibo, setRecibo] = useState(null);
+  const [dataProgramada, setDataProgramada] = useState(programacaoInicial?.data || "");
+  const [horaInicio, setHoraInicio] = useState(programacaoInicial?.horaInicio || "");
+  const [horaFim, setHoraFim] = useState(programacaoInicial?.horaFim || "");
+  const [observacao, setObservacao] = useState("");
 
   useEffect(() => {
     if (!ordemEmEdicao) return;
@@ -1605,6 +1619,10 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
     setVencimento(ordemEmEdicao.dataVencimento || todayISO());
     setQtdParcelas(ordemEmEdicao.parcelas?.length || 1);
     setFuncionarioId(ordemEmEdicao.funcionarioId || "");
+    setDataProgramada(ordemEmEdicao.dataProgramada || "");
+    setHoraInicio(ordemEmEdicao.horaInicio || "");
+    setHoraFim(ordemEmEdicao.horaFim || "");
+    setObservacao(ordemEmEdicao.observacao || "");
   }, [ordemEmEdicao]);
 
   const catalogo = [
@@ -1644,6 +1662,7 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
   };
 
   const removeItem = (uidLine) => {
+    if (!confirmarExclusao("este item da OS")) return;
     setItens((prev) => prev.filter((i) => i.uidLine !== uidLine));
     if (editandoItem === uidLine) {
       setEditandoItem(null);
@@ -1675,6 +1694,23 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
   const salvar = (concluir) => {
     if (itens.length === 0 || !clienteId) return;
     if (concluir && hasServico && !funcionarioId) return;
+    const programacaoCompleta = Boolean(dataProgramada && horaInicio && horaFim);
+    if (programacaoCompleta && timeToMinutes(horaFim) <= timeToMinutes(horaInicio)) {
+      window.alert("O horário final deve ser posterior ao horário inicial.");
+      return;
+    }
+    const conflito = programacaoCompleta && funcionarioId && db.ordens.some((item) =>
+      item.id !== ordemEmEdicao?.id
+      && item.dataProgramada === dataProgramada
+      && ["pendente", "concluido"].includes(item.statusOS)
+      && String(item.funcionarioId || "") === String(funcionarioId)
+      && timeToMinutes(horaInicio) < timeToMinutes(item.horaFim || "00:00")
+      && timeToMinutes(horaFim) > timeToMinutes(item.horaInicio || "00:00")
+    );
+    if (conflito) {
+      window.alert("Este responsável já possui uma OS programada neste horário.");
+      return;
+    }
     const cliente = db.clientes.find((c) => c.id === clienteId);
     const numero = ordemEmEdicao?.numero || (db.ordens.filter((item) => !item.lancamentoManual).length + 1).toString().padStart(4, "0");
     const ordemId = ordemEmEdicao?.id || uid();
@@ -1684,6 +1720,10 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
       id: ordemId,
       numero,
       data: todayISO(),
+      dataProgramada: dataProgramada || null,
+      horaInicio: dataProgramada && horaInicio ? horaInicio : null,
+      horaFim: dataProgramada && horaFim ? horaFim : null,
+      observacao: observacao.trim(),
       clienteId,
       clienteNome: cliente?.nome || "Consumidor",
       veiculoId,
@@ -1755,6 +1795,15 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
             <ExternalLink size={16} /> Emitir nota de serviço
           </a>
         </div>
+        <div className="rounded-2xl border border-red-100 bg-red-50/60 p-4">
+          <div className="mb-3 flex items-center gap-2 text-sm font-bold text-red-800"><CalendarDays size={17} /> Programação da OS</div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <Field label="Data programada (opcional)"><input type="date" className={inputCls} value={dataProgramada} onChange={(e) => setDataProgramada(e.target.value)} /></Field>
+            <Field label="Hora inicial (opcional)"><input type="time" className={inputCls} value={horaInicio} onChange={(e) => setHoraInicio(e.target.value)} /></Field>
+            <Field label="Hora final (opcional)"><input type="time" className={inputCls} value={horaFim} onChange={(e) => setHoraFim(e.target.value)} /></Field>
+          </div>
+          <p className="mt-2 text-xs text-slate-500">A OS aparecerá na Agenda tanto em Carteira quanto concluída; o financeiro seguirá a forma de pagamento escolhida.</p>
+        </div>
         <Field label="Cliente">
           <button
             type="button"
@@ -1764,6 +1813,10 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
             <span>{clienteId ? (() => { const cliente = clientesComCodigo.find((item) => item.id === clienteId); return cliente ? `#${cliente.codigoExibicao} · ${cliente.nome}` : "Selecionar cliente"; })() : "Selecionar cliente"}</span>
             <Search size={17} className="text-emerald-700" />
           </button>
+        </Field>
+
+        <Field label="Observações da OS">
+          <textarea rows="3" className={inputCls} value={observacao} onChange={(e) => setObservacao(e.target.value)} placeholder="Informações adicionais para o atendimento" />
         </Field>
 
         {seletorClienteAberto && (
@@ -2045,6 +2098,7 @@ function Ordens({ db, update, empresa, onEditarNaOS, embedded = false }) {
   };
 
   const removerItemEdicao = (uidLine) => {
+    if (!confirmarExclusao("este item da OS")) return;
     setEditForm((prev) => ({ ...prev, itens: prev.itens.filter((item) => item.uidLine !== uidLine) }));
   };
 
@@ -2138,6 +2192,7 @@ function Ordens({ db, update, empresa, onEditarNaOS, embedded = false }) {
   const excluir = (id) => {
     const ordem = db.ordens.find((o) => o.id === id);
     if (!ordem) return;
+    if (!confirmarExclusao(`a OS #${ordem.numero}`)) return;
     // devolve estoque
     const produtosVendidos = ordem.itens.filter((i) => i.tipo === "produto");
     if (!["rascunho", "pendente", "estornado"].includes(ordem.statusOS) && produtosVendidos.length) {
@@ -2433,7 +2488,10 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
     const novo = { id: uid(), tipoVeiculo: form.tipoVeiculo, marca: form.marca, veiculo: form.veiculo, cor: form.cor, ano: form.ano, placa: form.placa, frota: form.frota, motorista: form.motorista };
     setForm((anterior) => ({ ...anterior, veiculos: [...anterior.veiculos, novo], tipoVeiculo: "", marca: "", veiculo: "", cor: "", ano: "", placa: "", frota: "", motorista: "" }));
   };
-  const remove = (id) => update("clientes", (prev) => prev.filter((c) => c.id !== id));
+  const remove = (id) => {
+    if (!confirmarExclusao("este cliente")) return;
+    update("clientes", (prev) => prev.filter((c) => c.id !== id));
+  };
 
   const lista = db.clientes.filter((c) => {
     const termo = busca.toLowerCase();
@@ -2508,7 +2566,7 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
                   {form.veiculos.map((veiculo, index) => (
                     <div key={veiculo.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
                       <span><strong>{index + 1}.</strong> {[veiculo.marca, veiculo.veiculo, veiculo.placa, veiculo.frota ? `Frota ${veiculo.frota}` : ""].filter(Boolean).join(" · ") || "Veículo sem identificação"}{veiculo.motorista ? ` · ${veiculo.motorista}` : ""}</span>
-                      <button type="button" onClick={() => setForm((anterior) => ({ ...anterior, veiculos: anterior.veiculos.filter((item) => item.id !== veiculo.id) }))} className="ml-3 text-slate-400 hover:text-red-500" title="Remover veículo"><Trash2 size={15} /></button>
+                      <button type="button" onClick={() => { if (confirmarExclusao("este veículo")) setForm((anterior) => ({ ...anterior, veiculos: anterior.veiculos.filter((item) => item.id !== veiculo.id) })); }} className="ml-3 text-slate-400 hover:text-red-500" title="Remover veículo"><Trash2 size={15} /></button>
                     </div>
                   ))}
                 </div>
@@ -2610,7 +2668,10 @@ function Servicos({ db, update, embedded = false }) {
     }]);
     setForm({ nome: "", preco: "", diasRetornoSugerido: "" });
   };
-  const remove = (id) => update("servicos", (prev) => prev.filter((s) => s.id !== id));
+  const remove = (id) => {
+    if (!confirmarExclusao("este serviço")) return;
+    update("servicos", (prev) => prev.filter((s) => s.id !== id));
+  };
   const editarPreco = (id, preco) => update("servicos", (prev) => prev.map((s) => (s.id === id ? { ...s, preco: Number(preco) } : s)));
   const editarRetorno = (id, dias) => update("servicos", (prev) => prev.map((s) => (s.id === id ? {
     ...s,
@@ -2678,7 +2739,10 @@ function Estoque({ db, update, embedded = false }) {
     ]);
     setForm({ nome: "", unidade: "un", quantidade: "", estoqueMinimo: "", precoCusto: "", precoVenda: "" });
   };
-  const remove = (id) => update("produtos", (prev) => prev.filter((p) => p.id !== id));
+  const remove = (id) => {
+    if (!confirmarExclusao("este produto")) return;
+    update("produtos", (prev) => prev.filter((p) => p.id !== id));
+  };
   const ajustar = (id, delta) =>
     update("produtos", (prev) => prev.map((p) => (p.id === id ? { ...p, quantidade: Math.max(0, Number(p.quantidade) + delta) } : p)));
   const editarProduto = (id, campo, valor) =>
@@ -3203,7 +3267,10 @@ function ContasPagar({ db, update, empresa }) {
     update("contasPagar", (prev) => prev.map((item) => item.id === conta.id ? { ...item, valorPago: 0, dataPagamento: null, dataBaixa: null, formaPagamentoBaixa: null, status: "pendente" } : item));
   };
 
-  const remove = (id) => update("contasPagar", (prev) => prev.filter((c) => c.id !== id));
+  const remove = (id) => {
+    if (!confirmarExclusao("esta conta a pagar")) return;
+    update("contasPagar", (prev) => prev.filter((c) => c.id !== id));
+  };
 
   const lista = db.contasPagar
     .filter((conta) => {
