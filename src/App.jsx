@@ -1465,6 +1465,29 @@ function ReciboFinanceiroModal({ tipo, conta, empresa = {}, onClose }) {
   );
 }
 
+function BaixaFinanceiraModal({ titulo, referencia, baixa, setBaixa, onConfirmar, onClose }) {
+  if (!baixa?.id) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="w-full max-w-lg rounded-lg bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="baixa-modal-title">
+        <header className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+          <div><h2 id="baixa-modal-title" className="text-lg font-bold text-slate-900">{titulo}</h2>{referencia && <p className="mt-1 text-sm text-slate-500">{referencia}</p>}</div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700" title="Fechar" aria-label="Fechar"><X size={20} /></button>
+        </header>
+        <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2">
+          <Field label="Valor da baixa"><input autoFocus type="number" min="0.01" step="0.01" className={inputCls} value={baixa.valor} onChange={(e) => setBaixa((prev) => ({ ...prev, valor: e.target.value }))} /></Field>
+          <Field label="Data da baixa"><input type="date" className={inputCls} value={baixa.data} onChange={(e) => setBaixa((prev) => ({ ...prev, data: e.target.value }))} /></Field>
+          <div className="sm:col-span-2"><Field label="Forma de pagamento"><select className={inputCls} value={baixa.formaPagamento} onChange={(e) => setBaixa((prev) => ({ ...prev, formaPagamento: e.target.value }))}><option>Dinheiro</option><option>Pix</option><option>Cartão de Débito</option><option>Cartão de Crédito</option><option>Carteira</option></select></Field></div>
+        </div>
+        <footer className="flex justify-end gap-2 border-t border-slate-200 px-5 py-4">
+          <button onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancelar</button>
+          <button onClick={onConfirmar} className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700">Confirmar baixa</button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
 // ---------- Ordens de servico (cadastro + historico) ----------
 function OrdensWorkspace({ db, update, empresa, ordemEmEdicao, setOrdemEmEdicao, podeEditarValor }) {
   const [modo, setModo] = useState("formulario");
@@ -2934,6 +2957,20 @@ function ContasReceber({ db, update, empresa }) {
     setBaixa({ id: null, originalId: null, valor: "", data: todayISO(), formaPagamento: "Dinheiro" });
   };
 
+  const estornarBaixa = (conta) => {
+    if (Number(conta.valorPago || 0) <= 0) return;
+    if (!window.confirm(`Deseja estornar a baixa da conta #${conta.numero}? O valor recebido voltará a ficar pendente.`)) return;
+    update("ordens", (prev) => prev.map((ordem) => {
+      if (ordem.id !== conta.originalId) return ordem;
+      if (!Array.isArray(ordem.parcelas) || !ordem.parcelas.length) {
+        return { ...ordem, valorPago: 0, dataBaixa: null, formaPagamentoBaixa: null, statusPagamento: "pendente" };
+      }
+      return { ...ordem, parcelas: ordem.parcelas.map((parcela) => parcela.id === conta.id ? { ...parcela, valorPago: 0, dataBaixa: null, formaPagamentoBaixa: null, status: "pendente" } : parcela) };
+    }));
+  };
+
+  const pesquisaAtiva = Boolean(filtros.busca.trim() || filtros.cliente || filtros.status !== "todos" || filtros.dataInicial || filtros.dataFinal);
+
   const totalPendente = contasFiltradasBase.reduce((s, o) => s + Math.max(0, Number(o.valorParcela || 0) - Number(o.valorPago || 0)), 0);
   const totalPago = contasFiltradasBase.reduce((s, o) => s + Number(o.valorPago || 0), 0);
   const totalGeral = contasFiltradasBase.reduce((s, o) => s + Number(o.valorParcela || 0), 0);
@@ -2941,6 +2978,7 @@ function ContasReceber({ db, update, empresa }) {
   return (
     <div className="space-y-6">
       {reciboFinanceiro && <ReciboFinanceiroModal tipo="receber" conta={reciboFinanceiro} empresa={empresa} onClose={() => setReciboFinanceiro(null)} />}
+      <BaixaFinanceiraModal titulo="Baixar conta a receber" referencia={baixa.id ? `Conta #${contasReceberFormatadas(db.ordens).find((conta) => conta.id === baixa.id)?.numero || ""}` : ""} baixa={baixa} setBaixa={setBaixa} onConfirmar={confirmarBaixa} onClose={() => setBaixa({ id: null, originalId: null, valor: "", data: todayISO(), formaPagamento: "Dinheiro" })} />
       <header>
         <h1 className="headline text-2xl font-bold text-slate-900">Contas a receber</h1>
         <p className="text-slate-500 text-sm mt-1">Gerado automaticamente a partir das ordens de serviço pendentes ou parciais.</p>
@@ -2985,7 +3023,7 @@ function ContasReceber({ db, update, empresa }) {
         </div>
       </Card>
 
-      {baixa.id && (
+      {false && baixa.id && (
         <Card className="p-4 bg-slate-50">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <Field label="Valor da baixa">
@@ -3011,7 +3049,7 @@ function ContasReceber({ db, update, empresa }) {
         </Card>
       )}
 
-      <Card className="p-0 overflow-hidden">
+      {!pesquisaAtiva ? <Card className="p-8"><EmptyState text="Use a pesquisa ou os filtros para localizar contas a receber." /></Card> : <Card className="p-0 overflow-hidden">
         {pendentes.length === 0 ? <EmptyState text="Nenhuma conta a receber no momento." /> : (
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
@@ -3044,6 +3082,7 @@ function ContasReceber({ db, update, empresa }) {
                         <button onClick={() => setReciboFinanceiro(o)} className="text-slate-400 hover:text-orange-700" title="Gerar recibo"><Printer size={17} /></button>
                         <button onClick={() => editarReceber(o)} className="text-slate-400 hover:text-emerald-700" title="Editar"><Pencil size={16} /></button>
                         {o.statusPagamento !== "pago" && <button onClick={() => abrirBaixa(o)} className="text-emerald-600 hover:text-emerald-700" title="Registrar baixa"><CheckCircle2 size={17} /></button>}
+                        {Number(o.valorPago || 0) > 0 && <button onClick={() => estornarBaixa(o)} className="text-amber-600 hover:text-red-600" title="Estornar baixa"><RotateCcw size={17} /></button>}
                       </div>
                     </td>
                   </tr>
@@ -3052,9 +3091,9 @@ function ContasReceber({ db, update, empresa }) {
             </tbody>
           </table>
         )}
-      </Card>
+      </Card>}
 
-      <div className="flex justify-end">
+      {pesquisaAtiva && <div className="flex justify-end">
         <div className="flex w-full flex-wrap items-center justify-between gap-x-6 gap-y-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm sm:w-auto sm:justify-end">
           <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Saldo do filtro</span>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
@@ -3063,7 +3102,7 @@ function ContasReceber({ db, update, empresa }) {
             <span className="text-slate-500">A receber <strong className="ml-1 text-amber-600">{brl(totalPendente)}</strong></span>
           </div>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }
@@ -3132,6 +3171,12 @@ function ContasPagar({ db, update, empresa }) {
     setBaixa({ id: null, valor: "", data: todayISO(), formaPagamento: "Dinheiro" });
   };
 
+  const estornarBaixa = (conta) => {
+    if (Number(conta.valorPago || 0) <= 0) return;
+    if (!window.confirm(`Deseja estornar a baixa de "${conta.descricao}"? O valor pago voltará a ficar pendente.`)) return;
+    update("contasPagar", (prev) => prev.map((item) => item.id === conta.id ? { ...item, valorPago: 0, dataPagamento: null, dataBaixa: null, formaPagamentoBaixa: null, status: "pendente" } : item));
+  };
+
   const remove = (id) => update("contasPagar", (prev) => prev.filter((c) => c.id !== id));
 
   const lista = db.contasPagar
@@ -3146,10 +3191,12 @@ function ContasPagar({ db, update, empresa }) {
   const totalPendente = lista.reduce((s, c) => s + Math.max(0, Number(c.valor) - Number(c.valorPago || 0)), 0);
   const totalPago = lista.reduce((s, c) => s + Number(c.valorPago || 0), 0);
   const totalGeral = lista.reduce((s, c) => s + Number(c.valor || 0), 0);
+  const pesquisaAtiva = Boolean(filtros.busca.trim() || filtros.status !== "todos" || filtros.dataInicial || filtros.dataFinal);
 
   return (
     <div className="space-y-6">
       {reciboFinanceiro && <ReciboFinanceiroModal tipo="pagar" conta={reciboFinanceiro} empresa={empresa} onClose={() => setReciboFinanceiro(null)} />}
+      <BaixaFinanceiraModal titulo="Baixar conta a pagar" referencia={baixa.id ? db.contasPagar.find((conta) => conta.id === baixa.id)?.descricao : ""} baixa={baixa} setBaixa={setBaixa} onConfirmar={confirmarBaixa} onClose={() => setBaixa({ id: null, valor: "", data: todayISO(), formaPagamento: "Dinheiro" })} />
       <header>
         <h1 className="headline text-2xl font-bold text-slate-900">Contas a pagar</h1>
         <p className="text-slate-500 text-sm mt-1">Fornecedores, contas fixas e outras despesas.</p>
@@ -3174,7 +3221,7 @@ function ContasPagar({ db, update, empresa }) {
         </div>
       </Card>
 
-      {baixa.id && (
+      {false && baixa.id && (
         <Card className="p-4 bg-slate-50">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <Field label="Valor da baixa">
@@ -3219,7 +3266,7 @@ function ContasPagar({ db, update, empresa }) {
         </div>
       </Card>
 
-      <Card className="p-0 overflow-hidden">
+      {!pesquisaAtiva ? <Card className="p-8"><EmptyState text="Use a pesquisa ou os filtros para localizar contas a pagar." /></Card> : <Card className="p-0 overflow-hidden">
         {lista.length === 0 ? <EmptyState text="Nenhuma conta a pagar cadastrada." /> : (
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
@@ -3251,6 +3298,7 @@ function ContasPagar({ db, update, empresa }) {
                         {c.status !== "pago" && (
                           <button onClick={() => abrirBaixa(c)} className="text-emerald-600 hover:text-emerald-700" title="Registrar baixa"><CheckCircle2 size={17} /></button>
                         )}
+                        {Number(c.valorPago || 0) > 0 && <button onClick={() => estornarBaixa(c)} className="text-amber-600 hover:text-red-600" title="Estornar baixa"><RotateCcw size={17} /></button>}
                         <button onClick={() => editarConta(c)} className="text-slate-400 hover:text-emerald-700" title="Editar"><Pencil size={16} /></button>
                         <button onClick={() => remove(c.id)} className="text-slate-400 hover:text-red-500" title="Excluir"><Trash2 size={16} /></button>
                       </div>
@@ -3261,9 +3309,9 @@ function ContasPagar({ db, update, empresa }) {
             </tbody>
           </table>
         )}
-      </Card>
+      </Card>}
 
-      <div className="flex justify-end">
+      {pesquisaAtiva && <div className="flex justify-end">
         <div className="flex w-full flex-wrap items-center justify-between gap-x-6 gap-y-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm sm:w-auto sm:justify-end">
           <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Saldo do filtro</span>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
@@ -3272,7 +3320,7 @@ function ContasPagar({ db, update, empresa }) {
             <span className="text-slate-500">A pagar <strong className="ml-1 text-red-600">{brl(totalPendente)}</strong></span>
           </div>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }
