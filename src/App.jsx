@@ -2732,7 +2732,9 @@ function Estoque({ db, update, embedded = false }) {
 function ContasReceber({ db, update, empresa }) {
   const [baixa, setBaixa] = useState({ id: null, originalId: null, valor: "", data: todayISO(), formaPagamento: "Dinheiro" });
   const [reciboFinanceiro, setReciboFinanceiro] = useState(null);
-  const [filtros, setFiltros] = useState({ busca: "", cliente: "", status: "todos", dataInicial: "", dataFinal: "" });
+  const filtrosIniciais = { cliente: "", dataConta: "", dataVencimento: "", status: "todos" };
+  const [filtrosForm, setFiltrosForm] = useState(filtrosIniciais);
+  const [filtrosAplicados, setFiltrosAplicados] = useState(filtrosIniciais);
   const receberInicial = { cliente: "", descricao: "", valor: "", vencimento: todayISO() };
   const [formReceber, setFormReceber] = useState(receberInicial);
   const [editandoReceber, setEditandoReceber] = useState(null);
@@ -2786,21 +2788,29 @@ function ContasReceber({ db, update, empresa }) {
     });
   };
 
+  const pesquisarContas = (event) => {
+    event?.preventDefault();
+    setFiltrosAplicados({ ...filtrosForm, cliente: filtrosForm.cliente.trim() });
+  };
+
+  const limparPesquisa = () => {
+    setFiltrosForm(filtrosIniciais);
+    setFiltrosAplicados(filtrosIniciais);
+  };
+
   const contasFiltradasBase = contasReceberFormatadas(db.ordens)
     .filter((o) => {
-      const termo = filtros.busca.trim().toLowerCase();
-      const correspondeTexto = !termo
-        || (o.clienteNome || "").toLowerCase().includes(termo)
-        || String(o.numero || "").toLowerCase().includes(termo.replace(/^#/, ""));
-      return correspondeTexto
-        && (!filtros.cliente || o.clienteNome === filtros.cliente)
-        && (!filtros.dataInicial || (o.dataVencimento || "") >= filtros.dataInicial)
-        && (!filtros.dataFinal || (o.dataVencimento || "") <= filtros.dataFinal);
+      const cliente = filtrosAplicados.cliente.toLowerCase();
+      const statusEfetivo = o.statusPagamento !== "pago" && o.dataVencimento && o.dataVencimento < todayISO()
+        ? "vencida"
+        : o.statusPagamento;
+      return (!cliente || (o.clienteNome || "").toLowerCase().includes(cliente))
+        && (!filtrosAplicados.dataConta || o.data === filtrosAplicados.dataConta)
+        && (!filtrosAplicados.dataVencimento || o.dataVencimento === filtrosAplicados.dataVencimento)
+        && (filtrosAplicados.status === "todos" || statusEfetivo === filtrosAplicados.status);
     });
   const pendentes = contasFiltradasBase
-    .filter((o) => filtros.status === "todos" || o.statusPagamento === filtros.status)
     .sort((a, b) => (a.dataVencimento || "") > (b.dataVencimento || "") ? 1 : -1);
-  const clientesReceber = [...new Set(contasReceberFormatadas(db.ordens).map((conta) => conta.clienteNome).filter(Boolean))].sort();
 
   const abrirBaixa = (ordem) => {
     const restante = Math.max(0, Number(ordem.valorParcela || 0) - Number(ordem.valorPago || 0));
@@ -2888,29 +2898,32 @@ function ContasReceber({ db, update, empresa }) {
         <p className="text-slate-500 text-sm mt-1">Gerado automaticamente a partir das ordens de serviço pendentes ou parciais.</p>
       </header>
 
-      <Card className="p-5">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3 lg:grid-cols-6 lg:items-end">
-          <Field label="Conta ou OS">
-            <div className="relative">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input className={inputCls + " pl-9"} placeholder="Digite para pesquisar..." value={filtros.busca} onChange={(e) => setFiltros((prev) => ({ ...prev, busca: e.target.value }))} />
-            </div>
-          </Field>
-          <Field label="Cliente/Pagador">
-            <select className={inputCls} value={filtros.cliente} onChange={(e) => setFiltros((prev) => ({ ...prev, cliente: e.target.value }))}>
-              <option value="">Todos</option>
-              {clientesReceber.map((cliente) => <option key={cliente} value={cliente}>{cliente}</option>)}
-            </select>
-          </Field>
-          <Field label="Status">
-            <select className={inputCls} value={filtros.status} onChange={(e) => setFiltros((prev) => ({ ...prev, status: e.target.value }))}>
-              <option value="todos">Todos</option><option value="pendente">Pendente</option><option value="parcial">Parcial</option><option value="pago">Pago</option>
-            </select>
-          </Field>
-          <Field label="Vencimento inicial"><input type="date" className={inputCls} value={filtros.dataInicial} onChange={(e) => setFiltros((prev) => ({ ...prev, dataInicial: e.target.value }))} /></Field>
-          <Field label="Vencimento final"><input type="date" className={inputCls} value={filtros.dataFinal} onChange={(e) => setFiltros((prev) => ({ ...prev, dataFinal: e.target.value }))} /></Field>
-          <button onClick={() => setFiltros({ busca: "", cliente: "", status: "todos", dataInicial: "", dataFinal: "" })} className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Limpar</button>
+      <Card className="overflow-hidden p-0">
+        <div className="border-b border-slate-100 bg-slate-50 px-5 py-4">
+          <h2 className="font-semibold text-slate-800">Pesquisar contas</h2>
+          <p className="mt-0.5 text-xs text-slate-500">Preencha um ou mais filtros e clique em Pesquisar.</p>
         </div>
+        <form onSubmit={pesquisarContas} className="p-5">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <Field label="Cliente/Pagador">
+              <div className="relative">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input className={inputCls + " pl-9"} placeholder="Digite o nome do cliente" value={filtrosForm.cliente} onChange={(e) => setFiltrosForm((prev) => ({ ...prev, cliente: e.target.value }))} />
+              </div>
+            </Field>
+            <Field label="Data da conta"><input type="date" className={inputCls} value={filtrosForm.dataConta} onChange={(e) => setFiltrosForm((prev) => ({ ...prev, dataConta: e.target.value }))} /></Field>
+            <Field label="Data do vencimento"><input type="date" className={inputCls} value={filtrosForm.dataVencimento} onChange={(e) => setFiltrosForm((prev) => ({ ...prev, dataVencimento: e.target.value }))} /></Field>
+            <Field label="Status">
+              <select className={inputCls} value={filtrosForm.status} onChange={(e) => setFiltrosForm((prev) => ({ ...prev, status: e.target.value }))}>
+                <option value="todos">Todos os status</option><option value="pendente">Pendente</option><option value="parcial">Parcial</option><option value="pago">Pago</option><option value="vencida">Vencida</option>
+              </select>
+            </Field>
+          </div>
+          <div className="mt-5 flex flex-wrap justify-end gap-3 border-t border-slate-100 pt-4">
+            <button type="button" onClick={limparPesquisa} className="rounded-xl border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Limpar filtros</button>
+            <button type="submit" className="flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700"><Search size={17} /> Pesquisar</button>
+          </div>
+        </form>
       </Card>
 
       <Card className="p-5">
@@ -2954,10 +2967,14 @@ function ContasReceber({ db, update, empresa }) {
       )}
 
       <Card className="p-0 overflow-hidden">
+        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+          <h2 className="font-semibold text-slate-800">Resultados</h2>
+          <span className="text-sm text-slate-500">{pendentes.length} {pendentes.length === 1 ? "conta encontrada" : "contas encontradas"}</span>
+        </div>
         {pendentes.length === 0 ? <EmptyState text="Nenhuma conta a receber no momento." /> : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full min-w-[1050px] text-sm">
             <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
-              <tr><th className="text-left px-4 py-3">OS</th><th className="text-left px-4 py-3">Cliente</th><th className="text-left px-4 py-3">Vencimento</th><th className="text-right px-4 py-3">Valor da conta</th><th className="text-right px-4 py-3">Valor pendente</th><th className="text-left px-4 py-3">Data do pagamento</th><th className="text-left px-4 py-3">Status</th><th className="px-4 py-3"></th></tr>
+              <tr><th className="text-left px-4 py-3">OS</th><th className="text-left px-4 py-3">Cliente</th><th className="text-left px-4 py-3">Data da conta</th><th className="text-left px-4 py-3">Vencimento</th><th className="text-right px-4 py-3">Valor da conta</th><th className="text-right px-4 py-3">Valor pendente</th><th className="text-left px-4 py-3">Pagamento</th><th className="text-left px-4 py-3">Status</th><th className="px-4 py-3"></th></tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {pendentes.map((o) => {
@@ -2969,6 +2986,7 @@ function ContasReceber({ db, update, empresa }) {
                       {o.totalParcelas > 1 ? ` · ${o.numeroParcela}/${o.totalParcelas}` : ""}
                     </td>
                     <td className="px-4 py-3">{o.clienteNome}</td>
+                    <td className="px-4 py-3 text-slate-500">{fmtDate(o.data)}</td>
                     <td className="px-4 py-3 text-slate-500">
                       <input
                         type="date"
@@ -2992,7 +3010,7 @@ function ContasReceber({ db, update, empresa }) {
                 );
               })}
             </tbody>
-          </table>
+          </table></div>
         )}
       </Card>
 
