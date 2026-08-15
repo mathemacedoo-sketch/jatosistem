@@ -44,6 +44,7 @@ const clienteFromRow = (row) => ({
   cor: row.cor || "",
   ano: row.ano || "",
   placa: row.placa || "",
+  frota: "",
   motorista: row.motorista || "",
   veiculos: Array.isArray(row.veiculos) && row.veiculos.length
     ? row.veiculos
@@ -56,6 +57,7 @@ const clienteFromRow = (row) => ({
           cor: row.cor || "",
           ano: row.ano || "",
           placa: row.placa || "",
+          frota: "",
           motorista: row.motorista || "",
         }]
       : []),

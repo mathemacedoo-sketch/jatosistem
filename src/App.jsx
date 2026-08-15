@@ -31,8 +31,8 @@ import {
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const veiculosDoCliente = (cliente = {}) => {
   if (Array.isArray(cliente.veiculos) && cliente.veiculos.length) return cliente.veiculos;
-  return cliente.tipoVeiculo || cliente.marca || cliente.veiculo || cliente.cor || cliente.ano || cliente.placa || cliente.motorista
-    ? [{ id: `legado-${cliente.id || "cliente"}`, tipoVeiculo: cliente.tipoVeiculo || "", marca: cliente.marca || "", veiculo: cliente.veiculo || "", cor: cliente.cor || "", ano: cliente.ano || "", placa: cliente.placa || "", motorista: cliente.motorista || "" }]
+  return cliente.tipoVeiculo || cliente.marca || cliente.veiculo || cliente.cor || cliente.ano || cliente.placa || cliente.frota || cliente.motorista
+    ? [{ id: `legado-${cliente.id || "cliente"}`, tipoVeiculo: cliente.tipoVeiculo || "", marca: cliente.marca || "", veiculo: cliente.veiculo || "", cor: cliente.cor || "", ano: cliente.ano || "", placa: cliente.placa || "", frota: cliente.frota || "", motorista: cliente.motorista || "" }]
     : [];
 };
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -156,7 +156,7 @@ const imprimirReciboOS = (ordem, empresa = {}, cliente = {}) => {
               <div><strong>Telefone:</strong> ${escapeHtml(cliente.telefone || "-")}</div>
               <div><strong>E-mail:</strong> ${escapeHtml(cliente.email || "-")}</div>
               ${enderecoCliente ? `<div style="grid-column:1/-1"><strong>Endereço:</strong> ${escapeHtml(enderecoCliente)}</div>` : ""}
-              ${ordem.veiculo || cliente.veiculo || ordem.placa || cliente.placa ? `<div style="grid-column:1/-1"><strong>Veículo:</strong> ${escapeHtml([ordem.marca || cliente.marca, ordem.veiculo || cliente.veiculo].filter(Boolean).join(" ") || "-")} ${ordem.cor || cliente.cor ? `· ${escapeHtml(ordem.cor || cliente.cor)}` : ""} ${ordem.ano || cliente.ano ? `· ${escapeHtml(ordem.ano || cliente.ano)}` : ""} ${ordem.placa || cliente.placa ? `· Placa ${escapeHtml(ordem.placa || cliente.placa)}` : ""}</div>` : ""}
+              ${ordem.veiculo || cliente.veiculo || ordem.placa || cliente.placa || ordem.frota || cliente.frota ? `<div style="grid-column:1/-1"><strong>Veículo:</strong> ${escapeHtml([ordem.marca || cliente.marca, ordem.veiculo || cliente.veiculo].filter(Boolean).join(" ") || "-")} ${ordem.cor || cliente.cor ? `· ${escapeHtml(ordem.cor || cliente.cor)}` : ""} ${ordem.ano || cliente.ano ? `· ${escapeHtml(ordem.ano || cliente.ano)}` : ""} ${ordem.placa || cliente.placa ? `· Placa ${escapeHtml(ordem.placa || cliente.placa)}` : ""} ${ordem.frota || cliente.frota ? `· Frota ${escapeHtml(ordem.frota || cliente.frota)}` : ""}</div>` : ""}
               ${ordem.motorista || cliente.motorista ? `<div style="grid-column:1/-1"><strong>Motorista/Responsável:</strong> ${escapeHtml(ordem.motorista || cliente.motorista)}</div>` : ""}
             </div>
           </section>
@@ -1376,7 +1376,7 @@ function ReciboOSModal({ ordem, empresa = {}, cliente = {}, onClose }) {
               <div><strong>Telefone:</strong> {cliente.telefone || "-"}</div>
               <div><strong>E-mail:</strong> {cliente.email || "-"}</div>
               {enderecoCliente && <div className="sm:col-span-2"><strong>Endereço:</strong> {enderecoCliente}</div>}
-              {(ordem.veiculo || cliente.veiculo || ordem.placa || cliente.placa) && <div className="sm:col-span-2"><strong>Veículo:</strong> {[ordem.marca || cliente.marca, ordem.veiculo || cliente.veiculo].filter(Boolean).join(" ") || "-"} {ordem.cor || cliente.cor ? `· ${ordem.cor || cliente.cor}` : ""} {ordem.ano || cliente.ano ? `· ${ordem.ano || cliente.ano}` : ""} {ordem.placa || cliente.placa ? `· Placa ${ordem.placa || cliente.placa}` : ""}</div>}
+              {(ordem.veiculo || cliente.veiculo || ordem.placa || cliente.placa || ordem.frota || cliente.frota) && <div className="sm:col-span-2"><strong>Veículo:</strong> {[ordem.marca || cliente.marca, ordem.veiculo || cliente.veiculo].filter(Boolean).join(" ") || "-"} {ordem.cor || cliente.cor ? `· ${ordem.cor || cliente.cor}` : ""} {ordem.ano || cliente.ano ? `· ${ordem.ano || cliente.ano}` : ""} {ordem.placa || cliente.placa ? `· Placa ${ordem.placa || cliente.placa}` : ""} {ordem.frota || cliente.frota ? `· Frota ${ordem.frota || cliente.frota}` : ""}</div>}
               {(ordem.motorista || cliente.motorista) && <div className="sm:col-span-2"><strong>Motorista/Responsável:</strong> {ordem.motorista || cliente.motorista}</div>}
             </div>
           </section>
@@ -1465,6 +1465,29 @@ function ReciboFinanceiroModal({ tipo, conta, empresa = {}, onClose }) {
   );
 }
 
+function BaixaFinanceiraModal({ titulo, referencia, baixa, setBaixa, onConfirmar, onClose }) {
+  if (!baixa?.id) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="w-full max-w-lg rounded-lg bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="baixa-modal-title">
+        <header className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+          <div><h2 id="baixa-modal-title" className="text-lg font-bold text-slate-900">{titulo}</h2>{referencia && <p className="mt-1 text-sm text-slate-500">{referencia}</p>}</div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700" title="Fechar" aria-label="Fechar"><X size={20} /></button>
+        </header>
+        <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2">
+          <Field label="Valor da baixa"><input autoFocus type="number" min="0.01" step="0.01" className={inputCls} value={baixa.valor} onChange={(e) => setBaixa((prev) => ({ ...prev, valor: e.target.value }))} /></Field>
+          <Field label="Data da baixa"><input type="date" className={inputCls} value={baixa.data} onChange={(e) => setBaixa((prev) => ({ ...prev, data: e.target.value }))} /></Field>
+          <div className="sm:col-span-2"><Field label="Forma de pagamento"><select className={inputCls} value={baixa.formaPagamento} onChange={(e) => setBaixa((prev) => ({ ...prev, formaPagamento: e.target.value }))}><option>Dinheiro</option><option>Pix</option><option>Cartão de Débito</option><option>Cartão de Crédito</option><option>Carteira</option></select></Field></div>
+        </div>
+        <footer className="flex justify-end gap-2 border-t border-slate-200 px-5 py-4">
+          <button onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancelar</button>
+          <button onClick={onConfirmar} className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700">Confirmar baixa</button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
 // ---------- Ordens de servico (cadastro + historico) ----------
 function OrdensWorkspace({ db, update, empresa, ordemEmEdicao, setOrdemEmEdicao, podeEditarValor }) {
   const [modo, setModo] = useState("formulario");
@@ -1533,6 +1556,7 @@ function OrdensWorkspace({ db, update, empresa, ordemEmEdicao, setOrdemEmEdicao,
 function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcluirFechado, podeEditarValor, embedded = false }) {
   const [clienteId, setClienteId] = useState(db.clientes[0]?.id || "");
   const [veiculoId, setVeiculoId] = useState("");
+  const [dadosVeiculo, setDadosVeiculo] = useState({ tipoVeiculo: "", marca: "", veiculo: "", cor: "", ano: "", placa: "", frota: "", motorista: "" });
   const [buscaCliente, setBuscaCliente] = useState("");
   const [seletorClienteAberto, setSeletorClienteAberto] = useState(false);
   const [itens, setItens] = useState([]);
@@ -1555,6 +1579,16 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
     if (!ordemEmEdicao) return;
     setClienteId(ordemEmEdicao.clienteId || "");
     setVeiculoId(ordemEmEdicao.veiculoId || "");
+    setDadosVeiculo({
+      tipoVeiculo: ordemEmEdicao.tipoVeiculo || "",
+      marca: ordemEmEdicao.marca || "",
+      veiculo: ordemEmEdicao.veiculo || "",
+      cor: ordemEmEdicao.cor || "",
+      ano: ordemEmEdicao.ano || "",
+      placa: ordemEmEdicao.placa || "",
+      frota: ordemEmEdicao.frota || "",
+      motorista: ordemEmEdicao.motorista || "",
+    });
     setBuscaCliente("");
     setItens((ordemEmEdicao.itens || []).map((item) => ({ ...item, uidLine: item.uidLine || uid() })));
     setFormaPagamento(ordemEmEdicao.formaPagamento || "Dinheiro");
@@ -1576,7 +1610,7 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
     !termoCliente
     || cliente.nome.toLowerCase().includes(termoCliente)
     || cliente.codigoExibicao.toLowerCase().includes(termoCliente)
-    || veiculosDoCliente(cliente).some((veiculo) => (veiculo.placa || "").toLowerCase().includes(termoCliente) || (veiculo.motorista || "").toLowerCase().includes(termoCliente))
+    || veiculosDoCliente(cliente).some((veiculo) => (veiculo.placa || "").toLowerCase().includes(termoCliente) || (veiculo.frota || "").toLowerCase().includes(termoCliente) || (veiculo.motorista || "").toLowerCase().includes(termoCliente))
   );
   const clienteSelecionado = db.clientes.find((cliente) => cliente.id === clienteId);
   const veiculosDisponiveis = veiculosDoCliente(clienteSelecionado);
@@ -1635,7 +1669,6 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
     if (itens.length === 0 || !clienteId) return;
     if (concluir && hasServico && !funcionarioId) return;
     const cliente = db.clientes.find((c) => c.id === clienteId);
-    const veiculoSelecionado = veiculosDoCliente(cliente).find((veiculo) => veiculo.id === veiculoId) || veiculosDoCliente(cliente)[0] || {};
     const numero = ordemEmEdicao?.numero || (db.ordens.filter((item) => !item.lancamentoManual).length + 1).toString().padStart(4, "0");
     const ordemId = ordemEmEdicao?.id || uid();
     const vendaCarteira = formaPagamento === "Carteira";
@@ -1646,13 +1679,15 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
       data: todayISO(),
       clienteId,
       clienteNome: cliente?.nome || "Consumidor",
-      veiculoId: veiculoSelecionado.id || "",
-      veiculo: veiculoSelecionado.veiculo || "",
-      marca: veiculoSelecionado.marca || "",
-      cor: veiculoSelecionado.cor || "",
-      ano: veiculoSelecionado.ano || "",
-      placa: veiculoSelecionado.placa || "",
-      motorista: veiculoSelecionado.motorista || "",
+      veiculoId,
+      tipoVeiculo: dadosVeiculo.tipoVeiculo || "",
+      veiculo: dadosVeiculo.veiculo || "",
+      marca: dadosVeiculo.marca || "",
+      cor: dadosVeiculo.cor || "",
+      ano: dadosVeiculo.ano || "",
+      placa: dadosVeiculo.placa || "",
+      frota: dadosVeiculo.frota || "",
+      motorista: dadosVeiculo.motorista || "",
       itens,
       subtotal: subtotalItens,
       desconto: descontoAplicado,
@@ -1689,6 +1724,8 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
     setVencimento(todayISO());
     setQtdParcelas(1);
     setFuncionarioId("");
+    setVeiculoId("");
+    setDadosVeiculo({ tipoVeiculo: "", marca: "", veiculo: "", cor: "", ano: "", placa: "", frota: "", motorista: "" });
     onFinalizarEdicao?.(concluir);
   };
 
@@ -1744,8 +1781,10 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
                     type="button"
                     key={cliente.id}
                     onClick={() => {
+                      const primeiroVeiculo = veiculosDoCliente(cliente)[0] || {};
                       setClienteId(cliente.id);
-                      setVeiculoId(veiculosDoCliente(cliente)[0]?.id || "");
+                      setVeiculoId(primeiroVeiculo.id || "");
+                      setDadosVeiculo({ tipoVeiculo: primeiroVeiculo.tipoVeiculo || "", marca: primeiroVeiculo.marca || "", veiculo: primeiroVeiculo.veiculo || "", cor: primeiroVeiculo.cor || "", ano: primeiroVeiculo.ano || "", placa: primeiroVeiculo.placa || "", frota: primeiroVeiculo.frota || "", motorista: primeiroVeiculo.motorista || "" });
                       setBuscaCliente("");
                       setSeletorClienteAberto(false);
                     }}
@@ -1762,11 +1801,34 @@ function NovaOS({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcl
 
         {veiculosDisponiveis.length > 0 && (
           <Field label="Veículo desta ordem">
-            <select className={inputCls} value={veiculoId || veiculosDisponiveis[0].id} onChange={(e) => setVeiculoId(e.target.value)}>
-              {veiculosDisponiveis.map((veiculo) => <option key={veiculo.id} value={veiculo.id}>{[veiculo.marca, veiculo.veiculo, veiculo.placa].filter(Boolean).join(" · ") || "Veículo sem identificação"}</option>)}
+            <select className={inputCls} value={veiculoId} onChange={(e) => {
+              const id = e.target.value;
+              const veiculo = veiculosDisponiveis.find((item) => item.id === id) || {};
+              setVeiculoId(id);
+              setDadosVeiculo({ tipoVeiculo: veiculo.tipoVeiculo || "", marca: veiculo.marca || "", veiculo: veiculo.veiculo || "", cor: veiculo.cor || "", ano: veiculo.ano || "", placa: veiculo.placa || "", frota: veiculo.frota || "", motorista: veiculo.motorista || "" });
+            }}>
+              <option value="">Preencher manualmente</option>
+              {veiculosDisponiveis.map((veiculo) => <option key={veiculo.id} value={veiculo.id}>{[veiculo.marca, veiculo.veiculo, veiculo.placa, veiculo.frota ? `Frota ${veiculo.frota}` : ""].filter(Boolean).join(" · ") || "Veículo sem identificação"}</option>)}
             </select>
           </Field>
         )}
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="mb-3">
+            <div className="text-sm font-semibold text-slate-700">Dados do veículo na OS</div>
+            <p className="text-xs text-slate-500">Preencha ou altere estes dados apenas para esta ordem de serviço.</p>
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
+            <Field label="Tipo de veículo"><input className={inputCls} placeholder="Ex.: Carro" value={dadosVeiculo.tipoVeiculo} onChange={(e) => setDadosVeiculo((atual) => ({ ...atual, tipoVeiculo: e.target.value }))} /></Field>
+            <Field label="Marca"><input className={inputCls} placeholder="Ex.: Toyota" value={dadosVeiculo.marca} onChange={(e) => setDadosVeiculo((atual) => ({ ...atual, marca: e.target.value }))} /></Field>
+            <Field label="Modelo"><input className={inputCls} placeholder="Ex.: Corolla" value={dadosVeiculo.veiculo} onChange={(e) => setDadosVeiculo((atual) => ({ ...atual, veiculo: e.target.value }))} /></Field>
+            <Field label="Cor"><input className={inputCls} placeholder="Ex.: Prata" value={dadosVeiculo.cor} onChange={(e) => setDadosVeiculo((atual) => ({ ...atual, cor: e.target.value }))} /></Field>
+            <Field label="Ano"><input inputMode="numeric" maxLength={4} className={inputCls} placeholder="Ex.: 2024" value={dadosVeiculo.ano} onChange={(e) => setDadosVeiculo((atual) => ({ ...atual, ano: e.target.value.replace(/\D/g, "").slice(0, 4) }))} /></Field>
+            <Field label="Placa"><input maxLength={8} className={inputCls} placeholder="Ex.: ABC1D23" value={dadosVeiculo.placa} onChange={(e) => setDadosVeiculo((atual) => ({ ...atual, placa: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 7) }))} /></Field>
+            <Field label="Frota"><input className={inputCls} placeholder="Ex.: 001" value={dadosVeiculo.frota} onChange={(e) => setDadosVeiculo((atual) => ({ ...atual, frota: e.target.value }))} /></Field>
+            <Field label="Motorista/Responsável"><input className={inputCls} value={dadosVeiculo.motorista} onChange={(e) => setDadosVeiculo((atual) => ({ ...atual, motorista: e.target.value }))} /></Field>
+          </div>
+        </div>
 
         <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 space-y-3">
           <div className="text-sm font-semibold text-slate-700">Adicionar item</div>
@@ -2295,13 +2357,23 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
   const clienteFormInicial = {
     tipoPessoa: "fisica", nome: "", cpfCnpj: "", dataNascimento: "", email: "", telefone: "",
     cep: "", endereco: "", numero: "", bairro: "", cidade: "", estado: "",
-    tipoVeiculo: "", marca: "", veiculo: "", cor: "", ano: "", placa: "", motorista: "",
+    tipoVeiculo: "", marca: "", veiculo: "", cor: "", ano: "", placa: "", frota: "", motorista: "",
     veiculos: [],
   };
   const [form, setForm] = useState(clienteFormInicial);
   const [busca, setBusca] = useState("");
   const [editandoId, setEditandoId] = useState(null);
+  const [mensagemSucesso, setMensagemSucesso] = useState("");
   const formularioRef = useRef(null);
+  const mensagemTimerRef = useRef(null);
+
+  useEffect(() => () => clearTimeout(mensagemTimerRef.current), []);
+
+  const mostrarSucesso = (mensagem) => {
+    clearTimeout(mensagemTimerRef.current);
+    setMensagemSucesso(mensagem);
+    mensagemTimerRef.current = setTimeout(() => setMensagemSucesso(""), 3500);
+  };
 
   const salvar = async () => {
     if (!form.nome.trim()) {
@@ -2310,9 +2382,9 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
     }
     try {
       if (!empresaId) throw new Error("Não foi possível identificar a empresa deste cliente.");
-      const temVeiculoPendente = [form.tipoVeiculo, form.marca, form.veiculo, form.cor, form.ano, form.placa, form.motorista].some(Boolean);
+      const temVeiculoPendente = [form.tipoVeiculo, form.marca, form.veiculo, form.cor, form.ano, form.placa, form.frota, form.motorista].some(Boolean);
       const veiculos = temVeiculoPendente
-        ? [...form.veiculos, { id: uid(), tipoVeiculo: form.tipoVeiculo, marca: form.marca, veiculo: form.veiculo, cor: form.cor, ano: form.ano, placa: form.placa, motorista: form.motorista }]
+        ? [...form.veiculos, { id: uid(), tipoVeiculo: form.tipoVeiculo, marca: form.marca, veiculo: form.veiculo, cor: form.cor, ano: form.ano, placa: form.placa, frota: form.frota, motorista: form.motorista }]
         : form.veiculos;
       const primeiroVeiculo = veiculos[0] || {};
       const { id: _veiculoId, ...dadosPrimeiroVeiculo } = primeiroVeiculo;
@@ -2321,12 +2393,14 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
         await update("clientes", (prev) => prev.map((cliente) => cliente.id === editandoId ? { ...cliente, ...dadosCliente } : cliente));
         setEditandoId(null);
         setForm(clienteFormInicial);
+        mostrarSucesso("Cliente atualizado com sucesso!");
         return;
       }
       const proximoCodigo = String(Math.max(0, ...db.clientes.map((cliente) => Number(cliente.codigo) || 0)) + 1).padStart(4, "0");
       const cliente = await createCliente({ codigo: proximoCodigo, ...dadosCliente, empresaId });
       update("clientes", (prev) => [...prev, cliente]);
       setForm(clienteFormInicial);
+      mostrarSucesso("Cliente cadastrado com sucesso!");
     } catch (error) {
       console.error(error);
       alert(error.message);
@@ -2337,7 +2411,7 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
       Object.keys(clienteFormInicial).map((campo) => [campo, cliente[campo] ?? clienteFormInicial[campo]])
     );
     dadosFormulario.veiculos = veiculosDoCliente(cliente);
-    ["tipoVeiculo", "marca", "veiculo", "cor", "ano", "placa", "motorista"].forEach((campo) => { dadosFormulario[campo] = ""; });
+    ["tipoVeiculo", "marca", "veiculo", "cor", "ano", "placa", "frota", "motorista"].forEach((campo) => { dadosFormulario[campo] = ""; });
     setEditandoId(cliente.id);
     setForm(dadosFormulario);
     formularioRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -2348,9 +2422,9 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
   };
   const mostraCamposVeiculo = (empresaSegmento || "lava-jato").toLowerCase() === "lava-jato";
   const adicionarVeiculo = () => {
-    if (![form.tipoVeiculo, form.marca, form.veiculo, form.cor, form.ano, form.placa, form.motorista].some(Boolean)) return;
-    const novo = { id: uid(), tipoVeiculo: form.tipoVeiculo, marca: form.marca, veiculo: form.veiculo, cor: form.cor, ano: form.ano, placa: form.placa, motorista: form.motorista };
-    setForm((anterior) => ({ ...anterior, veiculos: [...anterior.veiculos, novo], tipoVeiculo: "", marca: "", veiculo: "", cor: "", ano: "", placa: "", motorista: "" }));
+    if (![form.tipoVeiculo, form.marca, form.veiculo, form.cor, form.ano, form.placa, form.frota, form.motorista].some(Boolean)) return;
+    const novo = { id: uid(), tipoVeiculo: form.tipoVeiculo, marca: form.marca, veiculo: form.veiculo, cor: form.cor, ano: form.ano, placa: form.placa, frota: form.frota, motorista: form.motorista };
+    setForm((anterior) => ({ ...anterior, veiculos: [...anterior.veiculos, novo], tipoVeiculo: "", marca: "", veiculo: "", cor: "", ano: "", placa: "", frota: "", motorista: "" }));
   };
   const remove = (id) => update("clientes", (prev) => prev.filter((c) => c.id !== id));
 
@@ -2358,11 +2432,17 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
     const termo = busca.toLowerCase();
     return c.nome.toLowerCase().includes(termo)
       || (c.cpfCnpj || "").toLowerCase().includes(termo)
-      || veiculosDoCliente(c).some((veiculo) => (veiculo.placa || "").toLowerCase().includes(termo) || (veiculo.motorista || "").toLowerCase().includes(termo));
+      || veiculosDoCliente(c).some((veiculo) => (veiculo.placa || "").toLowerCase().includes(termo) || (veiculo.frota || "").toLowerCase().includes(termo) || (veiculo.motorista || "").toLowerCase().includes(termo));
   });
 
   return (
     <div className="space-y-6">
+      {mensagemSucesso && (
+        <div role="status" className="fixed right-4 top-4 z-[100] flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 shadow-lg">
+          <CheckCircle2 size={19} />
+          {mensagemSucesso}
+        </div>
+      )}
       <header>
         <h1 className="headline text-2xl font-bold text-slate-900">Clientes</h1>
         <p className="text-slate-500 text-sm mt-1">Cadastre clientes e seus veículos.</p>
@@ -2411,6 +2491,7 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
                 <Field label="Cor"><input className={inputCls} placeholder="Ex.: Prata" value={form.cor} onChange={(e) => setForm({ ...form, cor: e.target.value })} /></Field>
                 <Field label="Ano"><input inputMode="numeric" maxLength={4} className={inputCls} placeholder="Ex.: 2024" value={form.ano} onChange={(e) => setForm({ ...form, ano: e.target.value.replace(/\D/g, "").slice(0, 4) })} /></Field>
                 <Field label="Placa"><input maxLength={8} className={inputCls} placeholder="Ex.: ABC1D23" value={form.placa} onChange={(e) => setForm({ ...form, placa: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 7) })} /></Field>
+                <Field label="Frota"><input className={inputCls} placeholder="Ex.: 001" value={form.frota} onChange={(e) => setForm({ ...form, frota: e.target.value })} /></Field>
                 <Field label="Motorista/Responsável"><input className={inputCls} placeholder="Quem costuma levar o veículo?" value={form.motorista} onChange={(e) => setForm({ ...form, motorista: e.target.value })} /></Field>
               </div>
               <button type="button" onClick={adicionarVeiculo} className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-50"><Plus size={15} /> Adicionar veículo à lista</button>
@@ -2419,7 +2500,7 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
                   <div className="text-xs font-semibold uppercase text-slate-500">Veículos cadastrados ({form.veiculos.length})</div>
                   {form.veiculos.map((veiculo, index) => (
                     <div key={veiculo.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
-                      <span><strong>{index + 1}.</strong> {[veiculo.marca, veiculo.veiculo, veiculo.placa].filter(Boolean).join(" · ") || "Veículo sem identificação"}{veiculo.motorista ? ` · ${veiculo.motorista}` : ""}</span>
+                      <span><strong>{index + 1}.</strong> {[veiculo.marca, veiculo.veiculo, veiculo.placa, veiculo.frota ? `Frota ${veiculo.frota}` : ""].filter(Boolean).join(" · ") || "Veículo sem identificação"}{veiculo.motorista ? ` · ${veiculo.motorista}` : ""}</span>
                       <button type="button" onClick={() => setForm((anterior) => ({ ...anterior, veiculos: anterior.veiculos.filter((item) => item.id !== veiculo.id) }))} className="ml-3 text-slate-400 hover:text-red-500" title="Remover veículo"><Trash2 size={15} /></button>
                     </div>
                   ))}
@@ -2735,6 +2816,7 @@ function ContasReceber({ db, update, empresa }) {
   const filtrosIniciais = { cliente: "", dataConta: "", dataVencimento: "", status: "todos" };
   const [filtrosForm, setFiltrosForm] = useState(filtrosIniciais);
   const [filtrosAplicados, setFiltrosAplicados] = useState(filtrosIniciais);
+  const [pesquisaAtiva, setPesquisaAtiva] = useState(false);
   const receberInicial = { cliente: "", descricao: "", valor: "", vencimento: todayISO() };
   const [formReceber, setFormReceber] = useState(receberInicial);
   const [editandoReceber, setEditandoReceber] = useState(null);
@@ -2762,7 +2844,7 @@ function ContasReceber({ db, update, empresa }) {
     update("ordens", (prev) => [...prev, {
       id,
       numero: `REC-${String(prev.filter((ordem) => ordem.lancamentoManual).length + 1).padStart(4, "0")}`,
-      data: ordemEmEdicao?.data || todayISO(),
+      data: todayISO(),
       clienteId: null,
       clienteNome: formReceber.cliente.trim(),
       itens: [{ uidLine: uid(), tipo: "manual", nome: formReceber.descricao.trim(), descricao: formReceber.descricao.trim(), qtd: 1, precoUnit: valor, subtotal: valor }],
@@ -2791,11 +2873,13 @@ function ContasReceber({ db, update, empresa }) {
   const pesquisarContas = (event) => {
     event?.preventDefault();
     setFiltrosAplicados({ ...filtrosForm, cliente: filtrosForm.cliente.trim() });
+    setPesquisaAtiva(true);
   };
 
   const limparPesquisa = () => {
     setFiltrosForm(filtrosIniciais);
     setFiltrosAplicados(filtrosIniciais);
+    setPesquisaAtiva(false);
   };
 
   const contasFiltradasBase = contasReceberFormatadas(db.ordens)
@@ -2886,6 +2970,18 @@ function ContasReceber({ db, update, empresa }) {
     setBaixa({ id: null, originalId: null, valor: "", data: todayISO(), formaPagamento: "Dinheiro" });
   };
 
+  const estornarBaixa = (conta) => {
+    if (Number(conta.valorPago || 0) <= 0) return;
+    if (!window.confirm(`Deseja estornar a baixa da conta #${conta.numero}? O valor recebido voltará a ficar pendente.`)) return;
+    update("ordens", (prev) => prev.map((ordem) => {
+      if (ordem.id !== conta.originalId) return ordem;
+      if (!Array.isArray(ordem.parcelas) || !ordem.parcelas.length) {
+        return { ...ordem, valorPago: 0, dataBaixa: null, formaPagamentoBaixa: null, statusPagamento: "pendente" };
+      }
+      return { ...ordem, parcelas: ordem.parcelas.map((parcela) => parcela.id === conta.id ? { ...parcela, valorPago: 0, dataBaixa: null, formaPagamentoBaixa: null, status: "pendente" } : parcela) };
+    }));
+  };
+
   const totalPendente = contasFiltradasBase.reduce((s, o) => s + Math.max(0, Number(o.valorParcela || 0) - Number(o.valorPago || 0)), 0);
   const totalPago = contasFiltradasBase.reduce((s, o) => s + Number(o.valorPago || 0), 0);
   const totalGeral = contasFiltradasBase.reduce((s, o) => s + Number(o.valorParcela || 0), 0);
@@ -2893,6 +2989,7 @@ function ContasReceber({ db, update, empresa }) {
   return (
     <div className="space-y-6">
       {reciboFinanceiro && <ReciboFinanceiroModal tipo="receber" conta={reciboFinanceiro} empresa={empresa} onClose={() => setReciboFinanceiro(null)} />}
+      <BaixaFinanceiraModal titulo="Baixar conta a receber" referencia={baixa.id ? `Conta #${contasReceberFormatadas(db.ordens).find((conta) => conta.id === baixa.id)?.numero || ""}` : ""} baixa={baixa} setBaixa={setBaixa} onConfirmar={confirmarBaixa} onClose={() => setBaixa({ id: null, originalId: null, valor: "", data: todayISO(), formaPagamento: "Dinheiro" })} />
       <header>
         <h1 className="headline text-2xl font-bold text-slate-900">Contas a receber</h1>
         <p className="text-slate-500 text-sm mt-1">Gerado automaticamente a partir das ordens de serviço pendentes ou parciais.</p>
@@ -2940,7 +3037,7 @@ function ContasReceber({ db, update, empresa }) {
         </div>
       </Card>
 
-      {baixa.id && (
+      {false && baixa.id && (
         <Card className="p-4 bg-slate-50">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <Field label="Valor da baixa">
@@ -2966,7 +3063,7 @@ function ContasReceber({ db, update, empresa }) {
         </Card>
       )}
 
-      <Card className="p-0 overflow-hidden">
+      {!pesquisaAtiva ? <Card className="p-8"><EmptyState text="Use a pesquisa ou os filtros para localizar contas a receber." /></Card> : <Card className="p-0 overflow-hidden">
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
           <h2 className="font-semibold text-slate-800">Resultados</h2>
           <span className="text-sm text-slate-500">{pendentes.length} {pendentes.length === 1 ? "conta encontrada" : "contas encontradas"}</span>
@@ -3004,6 +3101,7 @@ function ContasReceber({ db, update, empresa }) {
                         <button onClick={() => setReciboFinanceiro(o)} className="text-slate-400 hover:text-orange-700" title="Gerar recibo"><Printer size={17} /></button>
                         <button onClick={() => editarReceber(o)} className="text-slate-400 hover:text-emerald-700" title="Editar"><Pencil size={16} /></button>
                         {o.statusPagamento !== "pago" && <button onClick={() => abrirBaixa(o)} className="text-emerald-600 hover:text-emerald-700" title="Registrar baixa"><CheckCircle2 size={17} /></button>}
+                        {Number(o.valorPago || 0) > 0 && <button onClick={() => estornarBaixa(o)} className="text-amber-600 hover:text-red-600" title="Estornar baixa"><RotateCcw size={17} /></button>}
                       </div>
                     </td>
                   </tr>
@@ -3012,9 +3110,9 @@ function ContasReceber({ db, update, empresa }) {
             </tbody>
           </table></div>
         )}
-      </Card>
+      </Card>}
 
-      <div className="flex justify-end">
+      {pesquisaAtiva && <div className="flex justify-end">
         <div className="flex w-full flex-wrap items-center justify-between gap-x-6 gap-y-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm sm:w-auto sm:justify-end">
           <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Saldo do filtro</span>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
@@ -3023,7 +3121,7 @@ function ContasReceber({ db, update, empresa }) {
             <span className="text-slate-500">A receber <strong className="ml-1 text-amber-600">{brl(totalPendente)}</strong></span>
           </div>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }
@@ -3092,6 +3190,12 @@ function ContasPagar({ db, update, empresa }) {
     setBaixa({ id: null, valor: "", data: todayISO(), formaPagamento: "Dinheiro" });
   };
 
+  const estornarBaixa = (conta) => {
+    if (Number(conta.valorPago || 0) <= 0) return;
+    if (!window.confirm(`Deseja estornar a baixa de "${conta.descricao}"? O valor pago voltará a ficar pendente.`)) return;
+    update("contasPagar", (prev) => prev.map((item) => item.id === conta.id ? { ...item, valorPago: 0, dataPagamento: null, dataBaixa: null, formaPagamentoBaixa: null, status: "pendente" } : item));
+  };
+
   const remove = (id) => update("contasPagar", (prev) => prev.filter((c) => c.id !== id));
 
   const lista = db.contasPagar
@@ -3106,10 +3210,12 @@ function ContasPagar({ db, update, empresa }) {
   const totalPendente = lista.reduce((s, c) => s + Math.max(0, Number(c.valor) - Number(c.valorPago || 0)), 0);
   const totalPago = lista.reduce((s, c) => s + Number(c.valorPago || 0), 0);
   const totalGeral = lista.reduce((s, c) => s + Number(c.valor || 0), 0);
+  const pesquisaAtiva = Boolean(filtros.busca.trim() || filtros.status !== "todos" || filtros.dataInicial || filtros.dataFinal);
 
   return (
     <div className="space-y-6">
       {reciboFinanceiro && <ReciboFinanceiroModal tipo="pagar" conta={reciboFinanceiro} empresa={empresa} onClose={() => setReciboFinanceiro(null)} />}
+      <BaixaFinanceiraModal titulo="Baixar conta a pagar" referencia={baixa.id ? db.contasPagar.find((conta) => conta.id === baixa.id)?.descricao : ""} baixa={baixa} setBaixa={setBaixa} onConfirmar={confirmarBaixa} onClose={() => setBaixa({ id: null, valor: "", data: todayISO(), formaPagamento: "Dinheiro" })} />
       <header>
         <h1 className="headline text-2xl font-bold text-slate-900">Contas a pagar</h1>
         <p className="text-slate-500 text-sm mt-1">Fornecedores, contas fixas e outras despesas.</p>
@@ -3134,7 +3240,7 @@ function ContasPagar({ db, update, empresa }) {
         </div>
       </Card>
 
-      {baixa.id && (
+      {false && baixa.id && (
         <Card className="p-4 bg-slate-50">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <Field label="Valor da baixa">
@@ -3179,7 +3285,7 @@ function ContasPagar({ db, update, empresa }) {
         </div>
       </Card>
 
-      <Card className="p-0 overflow-hidden">
+      {!pesquisaAtiva ? <Card className="p-8"><EmptyState text="Use a pesquisa ou os filtros para localizar contas a pagar." /></Card> : <Card className="p-0 overflow-hidden">
         {lista.length === 0 ? <EmptyState text="Nenhuma conta a pagar cadastrada." /> : (
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
@@ -3211,6 +3317,7 @@ function ContasPagar({ db, update, empresa }) {
                         {c.status !== "pago" && (
                           <button onClick={() => abrirBaixa(c)} className="text-emerald-600 hover:text-emerald-700" title="Registrar baixa"><CheckCircle2 size={17} /></button>
                         )}
+                        {Number(c.valorPago || 0) > 0 && <button onClick={() => estornarBaixa(c)} className="text-amber-600 hover:text-red-600" title="Estornar baixa"><RotateCcw size={17} /></button>}
                         <button onClick={() => editarConta(c)} className="text-slate-400 hover:text-emerald-700" title="Editar"><Pencil size={16} /></button>
                         <button onClick={() => remove(c.id)} className="text-slate-400 hover:text-red-500" title="Excluir"><Trash2 size={16} /></button>
                       </div>
@@ -3221,9 +3328,9 @@ function ContasPagar({ db, update, empresa }) {
             </tbody>
           </table>
         )}
-      </Card>
+      </Card>}
 
-      <div className="flex justify-end">
+      {pesquisaAtiva && <div className="flex justify-end">
         <div className="flex w-full flex-wrap items-center justify-between gap-x-6 gap-y-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm sm:w-auto sm:justify-end">
           <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Saldo do filtro</span>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
@@ -3232,7 +3339,7 @@ function ContasPagar({ db, update, empresa }) {
             <span className="text-slate-500">A pagar <strong className="ml-1 text-red-600">{brl(totalPendente)}</strong></span>
           </div>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }
