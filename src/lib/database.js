@@ -9,6 +9,7 @@ const COLLECTIONS = [
   "ordens",
   "contasPagar",
   "contatosRetorno",
+  "agendamentos",
 ];
 const TENANT_COLLECTIONS = COLLECTIONS.filter((collection) => collection !== "empresas");
 

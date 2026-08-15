@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createCliente, loadDatabase, syncDatabase } from "./lib/database";
+import Agenda from "./componentes/Agenda";
 
 import {
   LayoutDashboard,
@@ -25,6 +26,7 @@ import {
   RotateCcw,
   ExternalLink,
   MessageCircle
+  ,CalendarDays
 } from "lucide-react";
 
 // ---------- helpers ----------
@@ -222,6 +224,7 @@ const getEmpresaData = (db, empresaId) => ({
   ordens: (db.ordens || []).filter((item) => item.empresaId === empresaId),
   contasPagar: (db.contasPagar || []).filter((item) => item.empresaId === empresaId),
   contatosRetorno: (db.contatosRetorno || []).filter((item) => item.empresaId === empresaId),
+  agendamentos: (db.agendamentos || []).filter((item) => item.empresaId === empresaId),
 });
 
 const clientesParaRetorno = (db, hoje = todayISO()) => {
@@ -363,6 +366,7 @@ const SEED = {
   ordens: [],
   contasPagar: [],
   contatosRetorno: [],
+  agendamentos: [],
 };
 
 const STORAGE_KEY = "jato_sistem_db_v1";
@@ -473,7 +477,7 @@ export default function App() {
           ordens: (initialData.ordens || []).map((ordem) => ordem.clienteNome === "Cliente Avulso" ? { ...ordem, clienteNome: "Consumidor" } : ordem),
         };
         const legacyCompanyId = initialData.empresas[0]?.id || empresaAdmId;
-        ["usuarios", "clientes", "funcionarios", "servicos", "produtos", "ordens", "contasPagar", "contatosRetorno"].forEach((collection) => {
+        ["usuarios", "clientes", "funcionarios", "servicos", "produtos", "ordens", "contasPagar", "contatosRetorno", "agendamentos"].forEach((collection) => {
           initialData[collection] = (initialData[collection] || []).map((item) =>
             item.empresaId ? item : { ...item, empresaId: legacyCompanyId }
           );
@@ -499,6 +503,7 @@ export default function App() {
           ordens: [],
           contasPagar: [],
           contatosRetorno: [],
+          agendamentos: [],
         };
         if (!active) return;
         dbRef.current = initialData;
@@ -507,7 +512,7 @@ export default function App() {
         const savedUser = (initialData.usuarios || []).find((usuario) => usuario.id === savedUi.usuarioId);
         if (savedUser) {
           const allowedUserTabs = ["ordens", "clientes"];
-          const managerTabs = ["dashboard", "ordens", "clientes", "funcionarios", "catalogo", "receber", "pagar", "usuarios"];
+          const managerTabs = ["dashboard", "agenda", "ordens", "clientes", "funcionarios", "catalogo", "receber", "pagar", "usuarios"];
           const masterTabs = [...managerTabs, "empresas"];
           const allowedTabs = savedUser.perfil === "master" ? masterTabs : savedUser.perfil === "gerente" ? managerTabs : allowedUserTabs;
           const savedTab = savedUi.tab === "nova-os"
@@ -606,7 +611,7 @@ export default function App() {
   const isMaster = authUser?.perfil === "master";
   const isGerente = authUser?.perfil === "gerente";
   const podeGerenciarUsuarios = isMaster || isGerente;
-  const tabsUsuario = ["ordens", "clientes"];
+  const tabsUsuario = ["agenda", "ordens", "clientes"];
   const podeAcessar = (tabId) => isMaster || isGerente || tabsUsuario.includes(tabId);
 
   const entrar = () => {
@@ -658,6 +663,7 @@ export default function App() {
 
   const NAV = [
     { id: "dashboard", label: "Painel", icon: LayoutDashboard },
+    { id: "agenda", label: "Agenda", icon: CalendarDays },
     { id: "ordens", label: "Ordens de Serviço", icon: ClipboardList },
     { id: "clientes", label: "Clientes", icon: Users },
     { id: "catalogo", label: "Produtos e Servi\u00e7os", icon: Boxes },
@@ -761,6 +767,7 @@ export default function App() {
       <main ref={mainRef} onScroll={saveScrollPosition} className="app-main flex-1 min-w-0 overflow-y-auto">
         <div className="max-w-7xl mx-auto p-6 md:p-8">
           {tab === "dashboard" && podeAcessar("dashboard") && <Dashboard db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} stats={stats} update={update} authUser={authUser} />}
+          {tab === "agenda" && podeAcessar("agenda") && <Agenda db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresaId={auth.empresaId || auth.usuarioLogado?.empresaId || ""} />}
           {tab === "ordens" && <OrdensWorkspace db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresa={empresaAtiva} ordemEmEdicao={ordemEmEdicao} setOrdemEmEdicao={setOrdemEmEdicao} podeEditarValor={isMaster || isGerente} />}
           {tab === "clientes" && <Clientes db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresaId={auth.empresaId || auth.usuarioLogado?.empresaId || ""} empresaSegmento={empresaAtiva?.segmento || "lava-jato"} />}
           {tab === "funcionarios" && podeAcessar("funcionarios") && <FuncionariosScreen db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresaId={auth.empresaId || auth.usuarioLogado?.empresaId || ""} />}
