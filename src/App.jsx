@@ -526,7 +526,7 @@ export default function App() {
             ? savedTab
             : savedUser.perfil === "usuario" ? "ordens" : "dashboard";
           setAuth({ usuario: savedUser.usuario, senha: "", empresaId: savedUser.empresaId || savedUi.empresaId || "", usuarioLogado: savedUser });
-          setTab(restoredTab);
+          setTab("agenda");
         }
         setLoaded(true);
         persistSnapshot(initialData).catch((error) => {
@@ -628,7 +628,7 @@ export default function App() {
     if (!user) return;
     const empresaId = user.empresaId || (auth.empresaId || empresas[0]?.id || "");
     setAuth((prev) => ({ ...prev, empresaId, usuarioLogado: user }));
-    setTab(user.perfil === "usuario" ? "ordens" : "dashboard");
+    setTab("agenda");
   };
 
   const sair = () => {
@@ -666,8 +666,8 @@ export default function App() {
   }, [db, auth.empresaId, auth.usuarioLogado]);
 
   const NAV = [
-    { id: "dashboard", label: "Painel", icon: LayoutDashboard },
     { id: "agenda", label: "Agenda", icon: CalendarDays },
+    { id: "dashboard", label: "Painel", icon: LayoutDashboard },
     { id: "ordens", label: "Ordens de Serviço", icon: ClipboardList },
     { id: "clientes", label: "Clientes", icon: Users },
     { id: "catalogo", label: "Produtos e Servi\u00e7os", icon: Boxes },
