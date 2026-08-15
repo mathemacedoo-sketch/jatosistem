@@ -2884,7 +2884,7 @@ function Estoque({ db, update, embedded = false }) {
 function ContasReceber({ db, update, empresa }) {
   const [baixa, setBaixa] = useState({ id: null, originalId: null, valor: "", data: todayISO(), formaPagamento: "Dinheiro" });
   const [reciboFinanceiro, setReciboFinanceiro] = useState(null);
-  const filtrosIniciais = { cliente: "", dataConta: "", dataVencimento: "", status: "todos" };
+  const filtrosIniciais = { cliente: "", dataConta: "", dataVencimento: "", dataPagamento: "", status: "todos" };
   const [filtrosForm, setFiltrosForm] = useState(filtrosIniciais);
   const [filtrosAplicados, setFiltrosAplicados] = useState(filtrosIniciais);
   const [pesquisaAtiva, setPesquisaAtiva] = useState(false);
@@ -2959,9 +2959,11 @@ function ContasReceber({ db, update, empresa }) {
       const statusEfetivo = o.statusPagamento !== "pago" && o.dataVencimento && o.dataVencimento < todayISO()
         ? "vencida"
         : o.statusPagamento;
+      const dataPagamentoEfetiva = o.dataBaixa || (o.statusPagamento === "pago" && o.formaPagamento !== "Carteira" ? o.data : "");
       return (!cliente || (o.clienteNome || "").toLowerCase().includes(cliente))
         && (!filtrosAplicados.dataConta || o.data === filtrosAplicados.dataConta)
         && (!filtrosAplicados.dataVencimento || o.dataVencimento === filtrosAplicados.dataVencimento)
+        && (!filtrosAplicados.dataPagamento || (Number(o.valorPago || 0) > 0 && dataPagamentoEfetiva === filtrosAplicados.dataPagamento))
         && (filtrosAplicados.status === "todos" || statusEfetivo === filtrosAplicados.status);
     });
   const pendentes = contasFiltradasBase
@@ -3072,7 +3074,7 @@ function ContasReceber({ db, update, empresa }) {
           <p className="mt-0.5 text-xs text-slate-500">Preencha um ou mais filtros e clique em Pesquisar.</p>
         </div>
         <form onSubmit={pesquisarContas} className="p-5">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
             <Field label="Cliente/Pagador">
               <div className="relative">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -3081,6 +3083,7 @@ function ContasReceber({ db, update, empresa }) {
             </Field>
             <Field label="Data da conta"><input type="date" className={inputCls} value={filtrosForm.dataConta} onChange={(e) => setFiltrosForm((prev) => ({ ...prev, dataConta: e.target.value }))} /></Field>
             <Field label="Data do vencimento"><input type="date" className={inputCls} value={filtrosForm.dataVencimento} onChange={(e) => setFiltrosForm((prev) => ({ ...prev, dataVencimento: e.target.value }))} /></Field>
+            <Field label="Data do pagamento"><input type="date" className={inputCls} value={filtrosForm.dataPagamento} onChange={(e) => setFiltrosForm((prev) => ({ ...prev, dataPagamento: e.target.value }))} /></Field>
             <Field label="Status">
               <select className={inputCls} value={filtrosForm.status} onChange={(e) => setFiltrosForm((prev) => ({ ...prev, status: e.target.value }))}>
                 <option value="todos">Todos os status</option><option value="pendente">Pendente</option><option value="parcial">Parcial</option><option value="pago">Pago</option><option value="vencida">Vencida</option>
@@ -3165,7 +3168,7 @@ function ContasReceber({ db, update, empresa }) {
                     </td>
                     <td className="px-4 py-3 text-right font-medium text-slate-700">{brl(Number(o.valorParcela ?? o.total ?? 0))}</td>
                     <td className="px-4 py-3 text-right font-semibold">{brl(Math.max(0, Number(o.valorParcela || 0) - Number(o.valorPago || 0)))}</td>
-                    <td className="px-4 py-3 text-slate-500">{o.dataBaixa ? fmtDate(o.dataBaixa) : "-"}</td>
+                    <td className="px-4 py-3 text-slate-500">{fmtDate(o.dataBaixa || (o.statusPagamento === "pago" && o.formaPagamento !== "Carteira" ? o.data : ""))}</td>
                     <td className="px-4 py-3">{vencida ? <Badge tone="red">Vencida</Badge> : <StatusBadge status={o.statusPagamento} />}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-3">

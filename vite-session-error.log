@@ -287,3 +287,66 @@ This will cause a hydration error.
 
 [2m15:24:05[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22m<button> cannot contain a nested <button>.
 See this log for the ancestor stack trace.
+[2m15:36:15[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mIn HTML, <button> cannot be a descendant of <button>.
+This will cause a hydration error.
+
+  <App>
+    <div className="app-shell ..." style={{...}}>
+      <style>
+      <aside>
+      <main ref={{current:null}} onScroll={function saveScrollPosition} className="app-main f...">
+        <div className="max-w-7xl ...">
+          <Agenda db={{empresas:[...], ...}} onCreateOS={function onCreateOS} onOpenOS={function onOpenOS}>
+            <div className="space-y-4">
+              <header>
+              <div>
+              <section className="overflow-h...">
+                <div>
+                <div className="overflow-x...">
+                  <div className="grid min-w...">
+                    <div>
+                    <div>
+                    <div>
+                    <div>
+                    <div>
+                    <div>
+                    <div>
+                    <button>
+                    <button>
+                    <button>
+                    <button>
+                    <button>
+                    <button>
+                    <button>
+                    <button>
+                    <button>
+                    <button>
+                    <button>
+                    <button>
+                    <button>
+                    <button>
+                    <button>
+                    <button>
+                    <button>
+                    <button>
+                    <button>
+                    <button>
+                    <button>
+                    <button>
+>                   <button
+>                     onClick={function onClick}
+>                     className={"min-h-28 border-b border-r border-slate-200 p-1.5 text-left hover:bg-red-50/40 "}
+>                   >
+                      <span>
+                      <div className="space-y-1">
+                        <OSCard ordem={{id:"msupgi...", ...}} onOpen={function onOpenOS} compact={true}>
+>                         <button
+>                           type="button"
+>                           onClick={function onClick}
+>                           className="w-full rounded-lg border px-2 py-1 text-left text-xs shadow-sm hover:shadow bor..."
+>                         >
+                        ...
+                    ...
+
+[2m15:36:15[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22m<button> cannot contain a nested <button>.
+See this log for the ancestor stack trace.
