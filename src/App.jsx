@@ -3149,7 +3149,10 @@ function ContasReceber({ db, update, empresa }) {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {pendentes.map((o) => {
-                const vencida = o.dataVencimento && o.dataVencimento < todayISO();
+                const vencida = o.statusPagamento !== "pago"
+                  && Math.max(0, Number(o.valorParcela || 0) - Number(o.valorPago || 0)) > 0
+                  && o.dataVencimento
+                  && o.dataVencimento < todayISO();
                 return (
                   <tr key={o.id}>
                     <td className="px-4 py-3 font-medium">
