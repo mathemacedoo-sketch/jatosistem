@@ -601,6 +601,27 @@ export default function App() {
     return persistSnapshot(snapshot);
   };
 
+  const excluirEmpresa = (empresaId) => {
+    const previous = dbRef.current;
+    const tenantCollections = [
+      "usuarios", "clientes", "funcionarios", "servicos", "produtos",
+      "ordens", "contasPagar", "contatosRetorno",
+    ];
+    const next = {
+      ...previous,
+      empresas: (previous.empresas || []).filter((empresa) => empresa.id !== empresaId),
+    };
+
+    tenantCollections.forEach((collection) => {
+      next[collection] = (previous[collection] || []).filter((item) => item.empresaId !== empresaId);
+    });
+
+    const snapshot = JSON.parse(JSON.stringify(next));
+    dbRef.current = snapshot;
+    setDb(snapshot);
+    return persistSnapshot(snapshot);
+  };
+
   const empresas = db.empresas || [];
   const usuarios = db.usuarios || [];
   const empresaAtiva = empresas.find((empresa) => empresa.id === (auth.empresaId || auth.usuarioLogado?.empresaId)) || null;
@@ -778,7 +799,7 @@ export default function App() {
           {tab === "catalogo" && podeAcessar("catalogo") && <ProdutosServicos db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} />}
           {tab === "receber" && podeAcessar("receber") && <ContasReceber db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresa={empresaAtiva} />}
           {tab === "pagar" && podeAcessar("pagar") && <ContasPagar db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresa={empresaAtiva} />}
-          {tab === "empresas" && isMaster && <EmpresasScreen db={db} update={update} />}
+          {tab === "empresas" && isMaster && <EmpresasScreen db={db} update={update} excluirEmpresa={excluirEmpresa} empresaAtivaId={empresaAtiva?.id} />}
           {tab === "usuarios" && podeGerenciarUsuarios && <UsuariosScreen db={db} update={update} isMaster={isMaster} empresaId={auth.empresaId || auth.usuarioLogado?.empresaId || ""} />}
         </div>
       </main>
@@ -823,7 +844,7 @@ function LoginScreen({ auth, setAuth, entrar, db }) {
   );
 }
 
-function EmpresasScreen({ db, update }) {
+function EmpresasScreen({ db, update, excluirEmpresa, empresaAtivaId }) {
   const empresaFormInicial = {
     nome: "", razaoSocial: "", cnpj: "", inscricaoEstadual: "", email: "", telefone: "",
     cep: "", endereco: "", numero: "", bairro: "", cidade: "", estado: "",
@@ -833,6 +854,8 @@ function EmpresasScreen({ db, update }) {
   const [editandoId, setEditandoId] = useState(null);
   const [segmentoEditandoId, setSegmentoEditandoId] = useState(null);
   const [segmentoEditado, setSegmentoEditado] = useState("lava-jato");
+  const [excluindoId, setExcluindoId] = useState(null);
+  const [erroExcluir, setErroExcluir] = useState("");
 
   const add = async () => {
     if (!form.nome.trim()) return;
@@ -867,6 +890,28 @@ function EmpresasScreen({ db, update }) {
   const salvarEdicaoSegmento = (empresaId) => {
     update("empresas", (prev) => prev.map((empresa) => (empresa.id === empresaId ? { ...empresa, segmento: segmentoEditado } : empresa)));
     cancelarEdicaoSegmento();
+  };
+
+  const removerEmpresa = async (empresa) => {
+    if (empresa.id === empresaAtivaId) {
+      setErroExcluir("A empresa conectada não pode ser excluída. Entre por outra empresa administradora para removê-la.");
+      return;
+    }
+    if (!window.confirm(`Excluir a empresa "${empresa.nome}"? Todos os usuários e dados vinculados a ela também serão excluídos.`)) return;
+
+    setErroExcluir("");
+    setExcluindoId(empresa.id);
+    try {
+      await excluirEmpresa(empresa.id);
+      if (editandoId === empresa.id) {
+        setEditandoId(null);
+        setForm(empresaFormInicial);
+      }
+    } catch (error) {
+      setErroExcluir(`Não foi possível excluir a empresa: ${error.message}`);
+    } finally {
+      setExcluindoId(null);
+    }
   };
 
   return (
@@ -910,6 +955,7 @@ function EmpresasScreen({ db, update }) {
       </Card>
 
       <Card className="p-0 overflow-hidden">
+        {erroExcluir && <div className="border-b border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{erroExcluir}</div>}
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
             <tr><th className="text-left px-4 py-3">Empresa</th><th className="text-left px-4 py-3">Segmento</th><th className="text-left px-4 py-3">Criada em</th><th className="text-left px-4 py-3">Ações</th></tr>
@@ -941,7 +987,17 @@ function EmpresasScreen({ db, update }) {
                 <td className="px-4 py-3 text-slate-500">{fmtDate(empresa.criadoEm)}</td>
                 <td className="px-4 py-3 text-slate-500">
                   {segmentoEditandoId === empresa.id ? null : (
-                    <button onClick={() => editarEmpresa(empresa)} className="text-sm font-semibold text-emerald-700 hover:text-emerald-800">Editar</button>
+                    <div className="flex items-center gap-3">
+                      <button onClick={() => editarEmpresa(empresa)} className="text-sm font-semibold text-emerald-700 hover:text-emerald-800">Editar</button>
+                      <button
+                        onClick={() => removerEmpresa(empresa)}
+                        disabled={excluindoId === empresa.id || empresa.id === empresaAtivaId}
+                        title={empresa.id === empresaAtivaId ? "A empresa conectada não pode ser excluída" : "Excluir empresa"}
+                        className="text-sm font-semibold text-red-600 hover:text-red-700 disabled:cursor-not-allowed disabled:text-slate-300"
+                      >
+                        {excluindoId === empresa.id ? "Excluindo..." : "Excluir"}
+                      </button>
+                    </div>
                   )}
                 </td>
               </tr>
