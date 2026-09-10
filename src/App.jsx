@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createCliente, loadDatabase, syncDatabase } from "./lib/database";
-import Agenda from "./componentes/Agenda";
+import PedidoVenda from "./componentes/PedidoVenda";
+import { calcularItem, filtrarItensValidos, sincronizarParcelas, somarItens } from "./lib/pedido";
+import { ClienteDocumento, ItensDocumento, ObservacoesDocumento } from "./componentes/DocumentoVenda";
 
 import {
   LayoutDashboard,
@@ -25,8 +27,8 @@ import {
   Printer,
   RotateCcw,
   ExternalLink,
-  MessageCircle
-  ,CalendarDays
+  MessageCircle,
+  ChevronDown
 } from "lucide-react";
 
 // ---------- helpers ----------
@@ -49,6 +51,14 @@ const fmtDate = (d) => {
   const [y, m, day] = d.split("-");
   return `${day}/${m}/${y}`;
 };
+const enderecoCompleto = (pessoa = {}) =>
+  [
+    [pessoa.endereco, pessoa.numero].filter(Boolean).join(", "),
+    pessoa.bairro,
+    [pessoa.cidade, pessoa.estado].filter(Boolean).join(" - "),
+  ].filter(Boolean).join(" · ");
+const rotuloDocumentoCliente = (cliente = {}) =>
+  cliente.tipoPessoa === "juridica" || onlyDigits(cliente.cpfCnpj || "").length > 11 ? "CNPJ" : "CPF";
 const dayNumber = (date) => {
   const [year, month, day] = (date || "").split("-").map(Number);
   return year && month && day ? Math.floor(Date.UTC(year, month - 1, day) / 86400000) : null;
@@ -59,10 +69,6 @@ const addDays = (date, days) => {
   return new Date((base + Number(days || 0)) * 86400000).toISOString().slice(0, 10);
 };
 const monthKey = (d) => (d || "").slice(0, 7);
-const timeToMinutes = (time = "00:00") => {
-  const [hours, minutes] = time.split(":").map(Number);
-  return hours * 60 + minutes;
-};
 const confirmarExclusao = (descricao = "este registro") =>
   window.confirm(`Deseja realmente excluir ${descricao}? Esta ação não poderá ser desfeita.`);
 const DEFAULT_ADMIN_USERNAME = "admin";
@@ -91,103 +97,6 @@ const formatTelefone = (value = "") => {
     .replace(/(\d{4})(\d{4})$/, "$1-$2");
 };
 const formatCep = (value = "") => onlyDigits(value).slice(0, 8).replace(/(\d{5})(\d)/, "$1-$2");
-const escapeHtml = (value = "") =>
-  String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char]));
-
-const imprimirReciboOS = (ordem, empresa = {}, cliente = {}) => {
-  const janela = window.open("", "_blank", "width=820,height=900");
-  if (!janela) {
-    window.alert("O navegador bloqueou a janela de impressão. Permita pop-ups para imprimir o recibo.");
-    return;
-  }
-
-  const enderecoEmpresa = [empresa.endereco, empresa.numero, empresa.bairro, empresa.cidade, empresa.estado].filter(Boolean).join(", ");
-  const enderecoCliente = [cliente.endereco, cliente.numero, cliente.bairro, cliente.cidade, cliente.estado].filter(Boolean).join(", ");
-  const itens = (ordem.itens || []).map((item) => `
-    <tr>
-      <td>${escapeHtml(item.descricao || item.nome)}</td>
-      <td class="center">${escapeHtml(item.qtd)}</td>
-      <td class="right">${escapeHtml(brl(item.precoUnit))}</td>
-      <td class="right">${escapeHtml(brl(item.subtotal ?? Number(item.precoUnit || 0) * Number(item.qtd || 1)))}</td>
-    </tr>`).join("");
-
-  janela.document.write(`<!doctype html>
-    <html lang="pt-BR">
-      <head>
-        <meta charset="utf-8" />
-        <title>OS ${escapeHtml(ordem.numero)}</title>
-        <style>
-          * { box-sizing: border-box; }
-          body { margin: 0; padding: 28px; color: #172033; font: 14px Arial, sans-serif; }
-          .receipt { max-width: 760px; margin: 0 auto; border: 1px solid #cbd5e1; padding: 26px; }
-          .header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 2px solid #172033; padding-bottom: 18px; }
-          h1 { margin: 0 0 5px; font-size: 24px; } h2 { margin: 0; font-size: 20px; }
-          .muted { color: #64748b; } .section { margin-top: 20px; }
-          .section-title { margin-bottom: 8px; font-size: 12px; font-weight: bold; text-transform: uppercase; color: #64748b; }
-          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px 24px; }
-          table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-          th, td { border-bottom: 1px solid #e2e8f0; padding: 9px 6px; text-align: left; }
-          th { background: #f8fafc; font-size: 11px; text-transform: uppercase; color: #64748b; }
-          .right { text-align: right; } .center { text-align: center; }
-          .total { margin-top: 15px; text-align: right; font-size: 20px; font-weight: bold; }
-          .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 50px; margin-top: 70px; text-align: center; }
-          .signature { border-top: 1px solid #334155; padding-top: 8px; }
-          .print-note { margin-top: 25px; text-align: center; font-size: 11px; color: #94a3b8; }
-          .actions { max-width: 760px; margin: 0 auto 16px; display: flex; justify-content: flex-end; gap: 10px; }
-          .actions button { border: 0; border-radius: 9px; padding: 11px 18px; cursor: pointer; font-weight: bold; }
-          .print-button { background: #b45309; color: white; }
-          .close-button { background: #e2e8f0; color: #334155; }
-          @media print { body { padding: 0; } .actions { display: none; } .receipt { border: 0; max-width: none; } @page { margin: 12mm; } }
-        </style>
-      </head>
-      <body>
-        <div class="actions">
-          <button class="close-button" onclick="window.close()">Fechar</button>
-          <button class="print-button" onclick="window.print()">Imprimir / Salvar PDF</button>
-        </div>
-        <main class="receipt">
-          <div class="header">
-            <div>
-              <h1>${escapeHtml(empresa.nome || "Empresa")}</h1>
-              ${empresa.razaoSocial ? `<div>${escapeHtml(empresa.razaoSocial)}</div>` : ""}
-              ${empresa.cnpj ? `<div>CNPJ: ${escapeHtml(empresa.cnpj)}</div>` : ""}
-              ${enderecoEmpresa ? `<div class="muted">${escapeHtml(enderecoEmpresa)}</div>` : ""}
-              ${empresa.telefone || empresa.email ? `<div class="muted">${escapeHtml([empresa.telefone, empresa.email].filter(Boolean).join(" · "))}</div>` : ""}
-            </div>
-            <div class="right"><h2>ORDEM DE SERVIÇO</h2><div>Nº ${escapeHtml(ordem.numero)}</div><div class="muted">${escapeHtml(fmtDate(ordem.data))}</div></div>
-          </div>
-          <section class="section">
-            <div class="section-title">Cliente</div>
-            <div class="grid">
-              <div><strong>Nome:</strong> ${escapeHtml(ordem.clienteNome || cliente.nome || "-")}</div>
-              <div><strong>CPF/CNPJ:</strong> ${escapeHtml(cliente.cpfCnpj || "-")}</div>
-              <div><strong>Telefone:</strong> ${escapeHtml(cliente.telefone || "-")}</div>
-              <div><strong>E-mail:</strong> ${escapeHtml(cliente.email || "-")}</div>
-              ${enderecoCliente ? `<div style="grid-column:1/-1"><strong>Endereço:</strong> ${escapeHtml(enderecoCliente)}</div>` : ""}
-              ${ordem.veiculo || cliente.veiculo || ordem.placa || cliente.placa || ordem.frota || cliente.frota ? `<div style="grid-column:1/-1"><strong>Veículo:</strong> ${escapeHtml([ordem.marca || cliente.marca, ordem.veiculo || cliente.veiculo].filter(Boolean).join(" ") || "-")} ${ordem.cor || cliente.cor ? `· ${escapeHtml(ordem.cor || cliente.cor)}` : ""} ${ordem.ano || cliente.ano ? `· ${escapeHtml(ordem.ano || cliente.ano)}` : ""} ${ordem.placa || cliente.placa ? `· Placa ${escapeHtml(ordem.placa || cliente.placa)}` : ""} ${ordem.frota || cliente.frota ? `· Frota ${escapeHtml(ordem.frota || cliente.frota)}` : ""}</div>` : ""}
-              ${ordem.motorista || cliente.motorista ? `<div style="grid-column:1/-1"><strong>Motorista/Responsável:</strong> ${escapeHtml(ordem.motorista || cliente.motorista)}</div>` : ""}
-            </div>
-          </section>
-          <section class="section">
-            <div class="section-title">Itens da ordem</div>
-            <table><thead><tr><th>Descrição</th><th class="center">Qtd.</th><th class="right">Unitário</th><th class="right">Subtotal</th></tr></thead><tbody>${itens}</tbody></table>
-            <div class="total">Total: ${escapeHtml(brl(ordem.total))}</div>
-          </section>
-          <section class="section grid">
-            <div><strong>Pagamento:</strong> ${escapeHtml(ordem.formaPagamento || "-")}</div>
-            <div><strong>Status:</strong> ${escapeHtml(ordem.statusPagamento || "-")}</div>
-            <div><strong>Responsável:</strong> ${escapeHtml(ordem.funcionarioNome || "-")}</div>
-            <div><strong>Valor pago:</strong> ${escapeHtml(brl(ordem.valorPago || 0))}</div>
-          </section>
-          <div class="signatures"><div class="signature">Assinatura da empresa</div><div class="signature">Assinatura do cliente</div></div>
-          <div class="print-note">No diálogo de impressão, selecione “Salvar como PDF” para gerar o arquivo.</div>
-        </main>
-      </body>
-    </html>`);
-  janela.document.close();
-  janela.focus();
-};
-
 const createEmpresa = ({ nome, segmento = "lava-jato", ...dadosCadastrais }) => ({
   id: uid(),
   nome: nome.trim(),
@@ -228,6 +137,7 @@ const getEmpresaData = (db, empresaId) => ({
   servicos: (db.servicos || []).filter((item) => item.empresaId === empresaId),
   produtos: (db.produtos || []).filter((item) => item.empresaId === empresaId),
   ordens: (db.ordens || []).filter((item) => item.empresaId === empresaId),
+  orcamentos: (db.orcamentos || []).filter((item) => item.empresaId === empresaId),
   contasPagar: (db.contasPagar || []).filter((item) => item.empresaId === empresaId),
   contatosRetorno: (db.contatosRetorno || []).filter((item) => item.empresaId === empresaId),
 });
@@ -281,35 +191,6 @@ const clientesParaRetorno = (db, hoje = todayISO()) => {
   });
 };
 
-const gerarParcelas = (baseId, total, quantidade, vencimentoBase) => {
-  const qtd = Math.max(1, Number(quantidade) || 1);
-  const valorParcela = qtd > 1 ? Number(total) / qtd : Number(total);
-
-  return Array.from({ length: qtd }, (_, index) => {
-    const dataVencimento = (() => {
-      if (!vencimentoBase) {
-        const next = new Date();
-        next.setMonth(next.getMonth() + index);
-        return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
-      }
-      const [y, m, d] = vencimentoBase.split("-").map(Number);
-      const next = new Date(y, m - 1 + index, d);
-      return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
-    })();
-
-    return {
-      id: `${baseId}-p${index + 1}`,
-      numeroParcela: index + 1,
-      totalParcelas: qtd,
-      valor: Number(valorParcela.toFixed(2)),
-      status: "pendente",
-      valorPago: 0,
-      dataVencimento,
-      dataBaixa: null,
-    };
-  });
-};
-
 const contasReceberFormatadas = (ordens) =>
   ordens.filter((ordem) => !["rascunho", "pendente", "estornado"].includes(ordem.statusOS)).flatMap((ordem) => {
     const parcelas = Array.isArray(ordem.parcelas) && ordem.parcelas.length
@@ -322,7 +203,8 @@ const contasReceberFormatadas = (ordens) =>
       originalId: ordem.id,
       numeroParcela: parcela.numeroParcela || 1,
       totalParcelas: parcela.totalParcelas || 1,
-      valorParcela: Number(parcela.valor || ordem.total || 0),
+      valorParcela: Number(parcela.valor ?? ordem.total ?? 0),
+      formaPagamento: parcela.formaPagamento || ordem.formaPagamento,
       valorPago: Number(parcela.valorPago || 0),
       statusPagamento: parcela.status || ordem.statusPagamento || "pendente",
       dataVencimento: parcela.dataVencimento || ordem.dataVencimento,
@@ -369,6 +251,7 @@ const SEED = {
     { id: uid(), nome: "Aromatizante", unidade: "un", quantidade: 8, estoqueMinimo: 3, precoCusto: 6, precoVenda: 15, empresaId: empresaAdmId },
   ],
   ordens: [],
+  orcamentos: [],
   contasPagar: [],
   contatosRetorno: [],
 };
@@ -431,8 +314,10 @@ export default function App() {
   const [db, setDb] = useState(SEED);
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState("login");
+  const [servicoAberto, setServicoAberto] = useState(false);
+  const [cadastrosAberto, setCadastrosAberto] = useState(false);
+  const [financeiroAberto, setFinanceiroAberto] = useState(false);
   const [ordemEmEdicao, setOrdemEmEdicao] = useState(null);
-  const [programacaoOS, setProgramacaoOS] = useState(null);
   const [auth, setAuth] = useState({ usuario: "", senha: "", empresaId: "", usuarioLogado: null });
   const lastSynced = useRef(SEED);
   const dbRef = useRef(SEED);
@@ -482,7 +367,7 @@ export default function App() {
           ordens: (initialData.ordens || []).map((ordem) => ordem.clienteNome === "Cliente Avulso" ? { ...ordem, clienteNome: "Consumidor" } : ordem),
         };
         const legacyCompanyId = initialData.empresas[0]?.id || empresaAdmId;
-        ["usuarios", "clientes", "funcionarios", "servicos", "produtos", "ordens", "contasPagar", "contatosRetorno"].forEach((collection) => {
+        ["usuarios", "clientes", "funcionarios", "servicos", "produtos", "ordens", "orcamentos", "contasPagar", "contatosRetorno"].forEach((collection) => {
           initialData[collection] = (initialData[collection] || []).map((item) =>
             item.empresaId ? item : { ...item, empresaId: legacyCompanyId }
           );
@@ -506,6 +391,7 @@ export default function App() {
           servicos: [],
           produtos: [],
           ordens: [],
+          orcamentos: [],
           contasPagar: [],
           contatosRetorno: [],
         };
@@ -515,18 +401,18 @@ export default function App() {
         const savedUi = loadSavedUi();
         const savedUser = (initialData.usuarios || []).find((usuario) => usuario.id === savedUi.usuarioId);
         if (savedUser) {
-          const allowedUserTabs = ["ordens", "clientes"];
-          const managerTabs = ["dashboard", "agenda", "ordens", "clientes", "funcionarios", "catalogo", "receber", "pagar", "usuarios"];
+          const allowedUserTabs = ["ordens", "orcamentos", "clientes"];
+          const managerTabs = ["dashboard", "ordens", "orcamentos", "clientes", "funcionarios", "catalogo", "receber", "pagar", "usuarios"];
           const masterTabs = [...managerTabs, "empresas"];
           const allowedTabs = savedUser.perfil === "master" ? masterTabs : savedUser.perfil === "gerente" ? managerTabs : allowedUserTabs;
-          const savedTab = savedUi.tab === "nova-os"
+          const savedTab = ["nova-os", "agenda"].includes(savedUi.tab)
             ? "ordens"
             : ["servicos", "estoque"].includes(savedUi.tab) ? "catalogo" : savedUi.tab;
           const restoredTab = allowedTabs.includes(savedTab)
             ? savedTab
             : savedUser.perfil === "usuario" ? "ordens" : "dashboard";
           setAuth({ usuario: savedUser.usuario, senha: "", empresaId: savedUser.empresaId || savedUi.empresaId || "", usuarioLogado: savedUser });
-          setTab("agenda");
+          setTab(restoredTab);
         }
         setLoaded(true);
         persistSnapshot(initialData).catch((error) => {
@@ -549,6 +435,12 @@ export default function App() {
       tab,
     }));
   }, [loaded, auth.usuarioLogado, auth.empresaId, tab]);
+
+  useEffect(() => {
+    if (["ordens", "orcamentos"].includes(tab)) setServicoAberto(true);
+    if (["empresas", "usuarios", "clientes", "funcionarios", "catalogo"].includes(tab)) setCadastrosAberto(true);
+    if (["receber", "pagar"].includes(tab)) setFinanceiroAberto(true);
+  }, [tab]);
 
   useEffect(() => {
     if (!loaded || tab === "login") return;
@@ -582,17 +474,34 @@ export default function App() {
 
   const update = (key, updater) => {
     const previous = dbRef.current;
-    let next;
-    if (key === "empresas" || key === "usuarios") {
-      next = { ...previous, [key]: updater(previous[key] || []) };
-    } else {
-      const companyId = auth.empresaId || auth.usuarioLogado?.empresaId || "";
-      if (!companyId) throw new Error("Operação bloqueada: nenhuma empresa está vinculada ao usuário.");
-      const items = previous[key] || [];
-      const currentItems = items.filter((item) => item.empresaId === companyId);
-      const otherItems = items.filter((item) => item.empresaId !== companyId);
-      const updatedItems = updater(currentItems).map((item) => ({ ...item, empresaId: companyId }));
-      next = { ...previous, [key]: [...otherItems, ...updatedItems] };
+    let next = { ...previous };
+    const changes = typeof key === "string" ? { [key]: updater } : key;
+    for (const [collection, applyUpdate] of Object.entries(changes)) {
+      if (collection === "empresas" || collection === "usuarios") {
+        next = { ...next, [collection]: applyUpdate(next[collection] || []) };
+      } else {
+        const companyId = auth.empresaId || auth.usuarioLogado?.empresaId || "";
+        if (!companyId) throw new Error("Operação bloqueada: nenhuma empresa está vinculada ao usuário.");
+        const items = next[collection] || [];
+        const currentItems = items.filter((item) => item.empresaId === companyId);
+        const otherItems = items.filter((item) => item.empresaId !== companyId);
+        const updatedItems = applyUpdate(currentItems).map((item) => ({ ...(collection === "ordens" ? sincronizarParcelas(item) : item), empresaId: companyId }));
+        next = { ...next, [collection]: [...otherItems, ...updatedItems] };
+        if (collection === "ordens") {
+          const remainingIds = new Set(updatedItems.map((item) => String(item.id)));
+          const removedOrders = currentItems.filter((item) => !remainingIds.has(String(item.id)));
+          next.orcamentos = (next.orcamentos || []).map((orcamento) => {
+            const pedidoExcluido = orcamento.empresaId === companyId && removedOrders.some((ordem) =>
+              orcamento.pedidoId
+                ? String(orcamento.pedidoId) === String(ordem.id)
+                : ordem.origemOrcamentoId != null && String(ordem.origemOrcamentoId) === String(orcamento.id)
+            );
+            return pedidoExcluido
+              ? { ...orcamento, status: "pendente", pedidoId: null, convertidoEm: null }
+              : orcamento;
+          });
+        }
+      }
     }
 
     const snapshot = JSON.parse(JSON.stringify(next));
@@ -605,7 +514,7 @@ export default function App() {
     const previous = dbRef.current;
     const tenantCollections = [
       "usuarios", "clientes", "funcionarios", "servicos", "produtos",
-      "ordens", "contasPagar", "contatosRetorno",
+      "ordens", "orcamentos", "contasPagar", "contatosRetorno",
     ];
     const next = {
       ...previous,
@@ -636,8 +545,10 @@ export default function App() {
   const isMaster = authUser?.perfil === "master";
   const isGerente = authUser?.perfil === "gerente";
   const podeGerenciarUsuarios = isMaster || isGerente;
-  const tabsUsuario = ["agenda", "ordens", "clientes"];
+  const tabsUsuario = ["ordens", "orcamentos", "clientes"];
   const podeAcessar = (tabId) => isMaster || isGerente || tabsUsuario.includes(tabId);
+  const canShowCadastros = isMaster || isGerente || podeAcessar("clientes") || podeAcessar("funcionarios") || podeAcessar("catalogo") || podeGerenciarUsuarios;
+  const canShowFinanceiro = podeAcessar("receber") || podeAcessar("pagar");
 
   const entrar = () => {
     const isDefaultAdmin = auth.usuario.trim().toLowerCase() === DEFAULT_ADMIN_USERNAME;
@@ -649,7 +560,7 @@ export default function App() {
     if (!user) return;
     const empresaId = user.empresaId || (auth.empresaId || empresas[0]?.id || "");
     setAuth((prev) => ({ ...prev, empresaId, usuarioLogado: user }));
-    setTab("agenda");
+    setTab("ordens");
   };
 
   const sair = () => {
@@ -687,15 +598,8 @@ export default function App() {
   }, [db, auth.empresaId, auth.usuarioLogado]);
 
   const NAV = [
-    { id: "agenda", label: "Agenda", icon: CalendarDays },
     { id: "dashboard", label: "Painel", icon: LayoutDashboard },
-    { id: "ordens", label: "Ordens de Serviço", icon: ClipboardList },
-    { id: "clientes", label: "Clientes", icon: Users },
-    { id: "catalogo", label: "Produtos e Servi\u00e7os", icon: Boxes },
-    { id: "receber", label: "Contas a Receber", icon: Wallet },
-    { id: "pagar", label: "Contas a Pagar", icon: Landmark },
-    { id: "funcionarios", label: "Funcionários", icon: UserCog },
-  ].filter((item) => podeAcessar(item.id));
+  ].filter((item) => podeAcessar(item.accessId || item.id));
 
   if (!loaded) {
     return <div className="min-h-screen grid place-items-center bg-slate-50 text-sm font-medium text-slate-500">Carregando MM ERP...</div>;
@@ -764,22 +668,125 @@ export default function App() {
               >
                 <Icon size={17} />
                 {n.label}
-                {n.id === "catalogo" && stats.estoqueBaixo.length > 0 && (
-                  <span className="ml-auto bg-amber-400 text-[#052e25] text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                    {stats.estoqueBaixo.length}
-                  </span>
-                )}
               </button>
             );
           })}
-          {isMaster && (
-            <button onClick={() => setTab("empresas")} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition ${tab === "empresas" ? "bg-orange-500/20 text-orange-200 border border-orange-400/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "text-slate-300 hover:bg-white/5 hover:text-white border border-transparent"}`}>
-              <Building2 size={17} /> Empresas
-            </button>
+
+          {canShowCadastros && (
+            <div>
+              <button
+                type="button"
+                onClick={() => setCadastrosAberto((aberto) => !aberto)}
+                aria-expanded={cadastrosAberto}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition ${
+                  ["empresas", "usuarios", "clientes", "funcionarios", "catalogo"].includes(tab)
+                    ? "bg-orange-500/20 text-orange-200 border border-orange-400/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+                    : "text-slate-300 hover:bg-white/5 hover:text-white border border-transparent"
+                }`}
+              >
+                <Users size={17} />
+                Cadastros
+                <ChevronDown size={16} className={`ml-auto transition-transform ${cadastrosAberto ? "rotate-180" : ""}`} />
+              </button>
+              {cadastrosAberto && (
+                <div className="ml-5 mt-1 space-y-1 border-l border-white/15 pl-3">
+                  {isMaster && (
+                    <button type="button" onClick={() => setTab("empresas")} className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${tab === "empresas" ? "bg-white/10 font-semibold text-orange-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}>
+                      Empresas
+                    </button>
+                  )}
+                  {podeGerenciarUsuarios && (
+                    <button type="button" onClick={() => setTab("usuarios")} className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${tab === "usuarios" ? "bg-white/10 font-semibold text-orange-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}>
+                      Usuários
+                    </button>
+                  )}
+                  {podeAcessar("clientes") && (
+                    <button type="button" onClick={() => setTab("clientes")} className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${tab === "clientes" ? "bg-white/10 font-semibold text-orange-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}>
+                      Clientes
+                    </button>
+                  )}
+                  {podeAcessar("funcionarios") && (
+                    <button type="button" onClick={() => setTab("funcionarios")} className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${tab === "funcionarios" ? "bg-white/10 font-semibold text-orange-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}>
+                      Funcionários
+                    </button>
+                  )}
+                  {podeAcessar("catalogo") && (
+                    <button type="button" onClick={() => setTab("catalogo")} className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${tab === "catalogo" ? "bg-white/10 font-semibold text-orange-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}>
+                      Produtos e Serviços
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           )}
-          {podeGerenciarUsuarios && <button onClick={() => setTab("usuarios")} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition ${tab === "usuarios" ? "bg-orange-500/20 text-orange-200 border border-orange-400/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "text-slate-300 hover:bg-white/5 hover:text-white border border-transparent"}`}>
-            <UserCog size={17} /> Usuários
-          </button>}
+
+          <div>
+            <button
+              type="button"
+              onClick={() => setServicoAberto((aberto) => !aberto)}
+              aria-expanded={servicoAberto}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition ${
+                ["ordens", "orcamentos"].includes(tab)
+                  ? "bg-orange-500/20 text-orange-200 border border-orange-400/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+                  : "text-slate-300 hover:bg-white/5 hover:text-white border border-transparent"
+              }`}
+            >
+              <ClipboardList size={17} />
+              Serviço
+              <ChevronDown size={16} className={`ml-auto transition-transform ${servicoAberto ? "rotate-180" : ""}`} />
+            </button>
+            {servicoAberto && (
+              <div className="ml-5 mt-1 space-y-1 border-l border-white/15 pl-3">
+                <button
+                  type="button"
+                  onClick={() => setTab("orcamentos")}
+                  className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${tab === "orcamentos" ? "bg-white/10 font-semibold text-orange-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}
+                >
+                  Orçamento
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTab("ordens")}
+                  className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${tab === "ordens" ? "bg-white/10 font-semibold text-orange-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}
+                >
+                  Pedido
+                </button>
+              </div>
+            )}
+          </div>
+
+          {canShowFinanceiro && (
+            <div>
+              <button
+                type="button"
+                onClick={() => setFinanceiroAberto((aberto) => !aberto)}
+                aria-expanded={financeiroAberto}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition ${
+                  ["receber", "pagar"].includes(tab)
+                    ? "bg-orange-500/20 text-orange-200 border border-orange-400/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+                    : "text-slate-300 hover:bg-white/5 hover:text-white border border-transparent"
+                }`}
+              >
+                <Wallet size={17} />
+                Financeiro
+                <ChevronDown size={16} className={`ml-auto transition-transform ${financeiroAberto ? "rotate-180" : ""}`} />
+              </button>
+              {financeiroAberto && (
+                <div className="ml-5 mt-1 space-y-1 border-l border-white/15 pl-3">
+                  {podeAcessar("receber") && (
+                    <button type="button" onClick={() => setTab("receber")} className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${tab === "receber" ? "bg-white/10 font-semibold text-orange-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}>
+                      Contas a Receber
+                    </button>
+                  )}
+                  {podeAcessar("pagar") && (
+                    <button type="button" onClick={() => setTab("pagar")} className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${tab === "pagar" ? "bg-white/10 font-semibold text-orange-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}>
+                      Contas a Pagar
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </nav>
         <div className="px-5 py-4 text-[11px] text-slate-400 border-t border-white/10">
           <div className="mb-1 font-medium text-slate-200">{authUser?.nome || "Usuário"}</div>
@@ -792,8 +799,8 @@ export default function App() {
       <main ref={mainRef} onScroll={saveScrollPosition} className="app-main flex-1 min-w-0 overflow-y-auto">
         <div className="max-w-7xl mx-auto p-6 md:p-8">
           {tab === "dashboard" && podeAcessar("dashboard") && <Dashboard db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} stats={stats} update={update} authUser={authUser} />}
-          {tab === "agenda" && podeAcessar("agenda") && <Agenda db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} onCreateOS={(programacao) => { setOrdemEmEdicao(null); setProgramacaoOS(programacao); setTab("ordens"); }} onOpenOS={(ordem) => { setProgramacaoOS(null); setOrdemEmEdicao(ordem); setTab("ordens"); }} />}
-          {tab === "ordens" && <OrdensWorkspace db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresa={empresaAtiva} ordemEmEdicao={ordemEmEdicao} setOrdemEmEdicao={setOrdemEmEdicao} programacaoInicial={programacaoOS} setProgramacaoInicial={setProgramacaoOS} podeEditarValor={isMaster || isGerente} />}
+          {tab === "orcamentos" && podeAcessar("orcamentos") && <OrcamentosWorkspace db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresa={empresaAtiva} onAbrirPedido={(pedido) => { setOrdemEmEdicao(pedido); setTab("ordens"); }} />}
+          {tab === "ordens" && <OrdensWorkspace db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresa={empresaAtiva} ordemEmEdicao={ordemEmEdicao} setOrdemEmEdicao={setOrdemEmEdicao} podeEditarValor={isMaster || isGerente} />}
           {tab === "clientes" && <Clientes db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresaId={auth.empresaId || auth.usuarioLogado?.empresaId || ""} empresaSegmento={empresaAtiva?.segmento || "lava-jato"} />}
           {tab === "funcionarios" && podeAcessar("funcionarios") && <FuncionariosScreen db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresaId={auth.empresaId || auth.usuarioLogado?.empresaId || ""} />}
           {tab === "catalogo" && podeAcessar("catalogo") && <ProdutosServicos db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} />}
@@ -1398,10 +1405,76 @@ function StatusBadge({ status }) {
   return <Badge tone="red">Pendente</Badge>;
 }
 
+function OrcamentoPrintModal({ orcamento, empresa = {}, cliente = {}, onClose }) {
+  if (!orcamento) return null;
+  const clienteCompleto = { ...(orcamento.clienteSnapshot || {}), ...(cliente || {}) };
+  const enderecoEmpresa = enderecoCompleto(empresa);
+  const enderecoCliente = enderecoCompleto(clienteCompleto);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/60 p-4 sm:p-8">
+      <style>{`
+        @media print {
+          body * { visibility: hidden !important; }
+          .orcamento-print-area, .orcamento-print-area * { visibility: visible !important; }
+          .orcamento-print-area { position: absolute !important; inset: 0 !important; width: 210mm !important; min-height: 297mm !important; max-width: none !important; padding: 15mm !important; box-sizing: border-box !important; box-shadow: none !important; border: 0 !important; }
+          .orcamento-print-area tr, .orcamento-print-area section { break-inside: avoid; page-break-inside: avoid; }
+          .orcamento-print-actions { display: none !important; }
+          @page { size: A4 portrait; margin: 0; }
+        }
+      `}</style>
+      <div className="my-auto w-full max-w-[210mm]">
+        <div className="orcamento-print-actions mb-3 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow">Fechar</button>
+          <button onClick={() => window.print()} className="flex items-center gap-2 rounded-xl bg-orange-700 px-4 py-2.5 text-sm font-semibold text-white shadow">
+            <Printer size={17} /> Imprimir / Salvar PDF
+          </button>
+        </div>
+        <article className="orcamento-print-area mx-auto min-h-[297mm] w-[210mm] max-w-full bg-white p-6 text-sm text-slate-800 shadow-2xl sm:p-[15mm]">
+          <header className="flex justify-between gap-6 border-b-2 border-slate-800 pb-5">
+            <div>
+              <h1 className="text-2xl font-bold">{empresa.nome || "Empresa"}</h1>
+              {empresa.razaoSocial && <div>{empresa.razaoSocial}</div>}
+              {empresa.cnpj && <div>CNPJ: {empresa.cnpj}</div>}
+              {enderecoEmpresa && <div className="text-slate-500">{enderecoEmpresa}</div>}
+              {(empresa.telefone || empresa.email) && <div className="text-slate-500">{[empresa.telefone, empresa.email].filter(Boolean).join(" · ")}</div>}
+            </div>
+            <div className="text-right">
+              <h2 className="text-xl font-bold">ORÇAMENTO</h2>
+              <div>Nº {orcamento.numero || "Rascunho"}</div>
+              <div className="text-slate-500">{fmtDate(orcamento.data || todayISO())}</div>
+            </div>
+          </header>
+
+          <section className="mt-5">
+            <h3 className="mb-2 text-xs font-bold uppercase text-slate-500">Cliente</h3>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div><strong>Nome:</strong> {orcamento.clienteNome || clienteCompleto.nome || "-"}</div>
+              <div><strong>{rotuloDocumentoCliente(clienteCompleto)}:</strong> {clienteCompleto.cpfCnpj || "-"}</div>
+              <div className="sm:col-span-2"><strong>Endereço:</strong> {enderecoCliente || "-"}</div>
+            </div>
+          </section>
+
+          <section className="mt-5">
+            <h3 className="mb-2 text-xs font-bold uppercase text-slate-500">Itens do orçamento</h3>
+            <table className="w-full border-collapse">
+              <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-2 text-left">Descrição</th><th className="p-2 text-center">Qtd.</th><th className="p-2 text-right">Valor unitário</th><th className="p-2 text-right">Total</th></tr></thead>
+              <tbody>{(orcamento.itens || []).map((item, index) => <tr key={item.uidLine || item.id || index} className="border-b border-slate-200"><td className="p-2">{item.descricao || item.nome}</td><td className="p-2 text-center">{item.qtd}</td><td className="p-2 text-right">{brl(item.precoUnit)}</td><td className="p-2 text-right">{brl(item.subtotal ?? Number(item.precoUnit || 0) * Number(item.qtd || 1))}</td></tr>)}</tbody>
+            </table>
+            <div className="mt-4 text-right text-xl font-bold">Total: {brl(orcamento.total)}</div>
+          </section>
+        </article>
+      </div>
+    </div>
+  );
+}
+
 function ReciboOSModal({ ordem, empresa = {}, cliente = {}, onClose }) {
   if (!ordem) return null;
+  cliente = { ...cliente, ...ordem.clienteSnapshot };
   const enderecoEmpresa = [empresa.endereco, empresa.numero, empresa.bairro, empresa.cidade, empresa.estado].filter(Boolean).join(", ");
   const enderecoCliente = [cliente.endereco, cliente.numero, cliente.bairro, cliente.cidade, cliente.estado].filter(Boolean).join(", ");
+  const parcelasRecibo = ordem.parcelas?.length ? ordem.parcelas : (ordem.pagamentos || []).flatMap((pagamento) => pagamento.parcelas.map((parcela) => ({ ...parcela, formaPagamento: pagamento.formaPagamento, tipoPagamento: pagamento.tipoPagamento })));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/60 p-4 sm:p-8">
@@ -1432,7 +1505,7 @@ function ReciboOSModal({ ordem, empresa = {}, cliente = {}, onClose }) {
               {(empresa.telefone || empresa.email) && <div className="text-slate-500">{[empresa.telefone, empresa.email].filter(Boolean).join(" · ")}</div>}
             </div>
             <div className="text-right">
-              <h2 className="text-xl font-bold">ORDEM DE SERVIÇO</h2>
+              <h2 className="text-xl font-bold">PEDIDO DE VENDA</h2>
               <div>Nº {ordem.numero}</div>
               <div className="text-slate-500">{fmtDate(ordem.data)}</div>
             </div>
@@ -1446,27 +1519,26 @@ function ReciboOSModal({ ordem, empresa = {}, cliente = {}, onClose }) {
               <div><strong>Telefone:</strong> {cliente.telefone || "-"}</div>
               <div><strong>E-mail:</strong> {cliente.email || "-"}</div>
               {enderecoCliente && <div className="sm:col-span-2"><strong>Endereço:</strong> {enderecoCliente}</div>}
-              {(ordem.veiculo || cliente.veiculo || ordem.placa || cliente.placa || ordem.frota || cliente.frota) && <div className="sm:col-span-2"><strong>Veículo:</strong> {[ordem.marca || cliente.marca, ordem.veiculo || cliente.veiculo].filter(Boolean).join(" ") || "-"} {ordem.cor || cliente.cor ? `· ${ordem.cor || cliente.cor}` : ""} {ordem.ano || cliente.ano ? `· ${ordem.ano || cliente.ano}` : ""} {ordem.placa || cliente.placa ? `· Placa ${ordem.placa || cliente.placa}` : ""} {ordem.frota || cliente.frota ? `· Frota ${ordem.frota || cliente.frota}` : ""}</div>}
-              {(ordem.motorista || cliente.motorista) && <div className="sm:col-span-2"><strong>Motorista/Responsável:</strong> {ordem.motorista || cliente.motorista}</div>}
             </div>
           </section>
 
           <section className="mt-5">
-            <h3 className="mb-2 text-xs font-bold uppercase text-slate-500">Itens da ordem</h3>
+            <h3 className="mb-2 text-xs font-bold uppercase text-slate-500">Itens do pedido</h3>
             <table className="w-full border-collapse">
-              <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-2 text-left">Descrição</th><th className="p-2 text-center">Qtd.</th><th className="p-2 text-right">Unitário</th><th className="p-2 text-right">Subtotal</th></tr></thead>
-              <tbody>{(ordem.itens || []).map((item) => <tr key={item.uidLine} className="border-b border-slate-200"><td className="p-2">{item.descricao || item.nome}</td><td className="p-2 text-center">{item.qtd}</td><td className="p-2 text-right">{brl(item.precoUnit)}</td><td className="p-2 text-right">{brl(item.subtotal ?? Number(item.precoUnit || 0) * Number(item.qtd || 1))}</td></tr>)}</tbody>
+              <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-2 text-left">Cód.</th><th className="p-2 text-left">Descrição</th><th className="p-2 text-center">Qtd.</th><th className="p-2 text-right">Unitário</th><th className="p-2 text-right">Desconto</th><th className="p-2 text-right">Total</th></tr></thead>
+              <tbody>{(ordem.itens || []).map((item, index) => <tr key={item.uidLine || index} className="border-b border-slate-200"><td className="p-2">{item.codigo || "-"}</td><td className="p-2">{item.descricao || item.nome}</td><td className="p-2 text-center">{item.qtd}</td><td className="p-2 text-right">{brl(item.precoUnit)}</td><td className="p-2 text-right">{brl(item.desconto)}</td><td className="p-2 text-right">{brl(item.subtotal ?? Number(item.precoUnit || 0) * Number(item.qtd || 1) - Number(item.desconto || 0))}</td></tr>)}</tbody>
             </table>
             {Number(ordem.desconto || 0) > 0 && <div className="mt-4 text-right text-sm text-slate-500">Subtotal: {brl(ordem.subtotal || Number(ordem.total) + Number(ordem.desconto))}<br />Desconto: - {brl(ordem.desconto)}</div>}
             <div className="mt-4 text-right text-xl font-bold">Total: {brl(ordem.total)}</div>
           </section>
 
+          {ordem.observacao && <section className="mt-5"><h3 className="mb-2 text-xs font-bold uppercase text-slate-500">Observações</h3><p className="whitespace-pre-wrap">{ordem.observacao}</p></section>}
           <section className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div><strong>Pagamento:</strong> {ordem.formaPagamento || "-"}</div>
             <div><strong>Status financeiro:</strong> {ordem.statusPagamento || "-"}</div>
-            <div><strong>Responsável:</strong> {ordem.funcionarioNome || "-"}</div>
             <div><strong>Valor pago:</strong> {brl(ordem.valorPago || 0)}</div>
           </section>
+          {parcelasRecibo.length > 0 && <table className="mt-4 w-full text-xs"><thead className="bg-slate-50 text-left text-slate-500"><tr><th className="p-2">Modalidade</th><th className="p-2">Condição</th><th className="p-2">Forma</th><th className="p-2">Vencimento</th><th className="p-2 text-right">Valor</th></tr></thead><tbody>{parcelasRecibo.map((parcela) => <tr key={parcela.id}><td className="p-2">{parcela.tipoPagamento === "avista" ? "À vista" : "A prazo"}</td><td className="p-2">{parcela.numeroParcela}/{parcela.totalParcelas}</td><td className="p-2">{parcela.formaPagamento || ordem.formaPagamento}</td><td className="p-2">{fmtDate(parcela.dataVencimento)}</td><td className="p-2 text-right">{brl(parcela.valor)}</td></tr>)}</tbody></table>}
           <div className="mt-16 grid grid-cols-2 gap-12 text-center"><div className="border-t border-slate-700 pt-2">Assinatura da empresa</div><div className="border-t border-slate-700 pt-2">Assinatura do cliente</div></div>
         </article>
       </div>
@@ -1558,693 +1630,304 @@ function BaixaFinanceiraModal({ titulo, referencia, baixa, setBaixa, onConfirmar
   );
 }
 
-// ---------- Ordens de servico (cadastro + historico) ----------
-function OrdensWorkspace({ db, update, empresa, ordemEmEdicao, setOrdemEmEdicao, programacaoInicial, setProgramacaoInicial, podeEditarValor }) {
-  const [modo, setModo] = useState("formulario");
+// ---------- Orçamentos ----------
+function OrcamentosWorkspace({ db, update, empresa, onAbrirPedido }) {
+  const [clienteId, setClienteId] = useState("");
+  const [itens, setItens] = useState([]);
+  const [observacao, setObservacao] = useState("");
+  const operacaoEmCurso = useRef(false);
+  const novoOrcamentoId = useRef(uid());
+  const [orcamentoAtual, setOrcamentoAtual] = useState(null);
+  const [orcamentoParaImpressao, setOrcamentoParaImpressao] = useState(null);
+  const [salvando, setSalvando] = useState(false);
+  const [mensagem, setMensagem] = useState("");
+
+  const clienteSelecionado = (db.clientes || []).find((cliente) => String(cliente.id) === String(clienteId));
+  const numeroSeguinte = `ORC-${String(Math.max(0, ...(db.orcamentos || []).map((item) => Number(String(item.numero || "").replace(/\D/g, "")) || 0)) + 1).padStart(4, "0")}`;
+  const orcamentos = [...(db.orcamentos || [])].sort((a, b) => String(b.data || "").localeCompare(String(a.data || "")));
+  const registroAtual = (db.orcamentos || []).find((item) => String(item.id) === String(orcamentoAtual?.id)) || orcamentoAtual;
+  const convertido = Boolean(registroAtual?.pedidoId);
+
+  const resetarFormulario = () => {
+    setClienteId("");
+    setItens([]);
+    setOrcamentoAtual(null);
+    setObservacao("");
+    novoOrcamentoId.current = uid();
+    setMensagem("");
+  };
+
+  const carregarOrcamento = (orcamento) => {
+    setClienteId(orcamento.clienteId || "");
+    setItens((orcamento.itens || []).map((item) => ({
+      ...item,
+      uidLine: item.uidLine || uid(),
+      descricao: item.descricao || item.nome || "",
+      qtd: Number(item.qtd ?? 1),
+      precoUnit: Number(item.precoUnit || 0),
+      subtotal: Number(item.subtotal ?? Number(item.precoUnit || 0) * Number(item.qtd || 1)),
+    })));
+    setOrcamentoAtual(orcamento);
+    setObservacao(orcamento.observacao || "");
+    setMensagem("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const montarOrcamento = () => {
+    if (!clienteSelecionado) {
+      window.alert("Selecione o cliente do orçamento.");
+      return null;
+    }
+    const itensValidos = filtrarItensValidos(itens).map((item) => calcularItem({ ...item, descricao: String(item.descricao || item.nome || "").trim(), nome: item.nome || String(item.descricao || item.nome || "").trim() }));
+    if (!itensValidos.length) {
+      window.alert("Preencha os itens com descrição, quantidade maior que zero e valor unitário válido.");
+      return null;
+    }
+    const resumo = somarItens(itensValidos);
+    const clienteSnapshot = Object.fromEntries(["nome", "tipoPessoa", "cpfCnpj", "dataNascimento", "telefone", "email", "cep", "endereco", "numero", "bairro", "cidade", "estado"].map((campo) => [campo, clienteSelecionado[campo] || ""]));
+    return {
+      ...registroAtual,
+      id: registroAtual?.id || novoOrcamentoId.current,
+      numero: orcamentoAtual?.numero || numeroSeguinte,
+      data: orcamentoAtual?.data || todayISO(),
+      clienteId: clienteSelecionado.id,
+      clienteNome: clienteSelecionado.nome || "Cliente",
+      clienteSnapshot,
+      itens: itensValidos,
+      subtotal: resumo.subtotal,
+      total: resumo.total,
+      observacao: observacao.trim(),
+      status: orcamentoAtual?.status || "aberto",
+      pedidoId: orcamentoAtual?.pedidoId || null,
+      convertidoEm: orcamentoAtual?.convertidoEm || null,
+    };
+  };
+
+  const salvarOrcamento = async () => {
+    if (convertido) {
+      window.alert("Este orçamento já foi convertido em pedido e não pode mais ser alterado.");
+      return;
+    }
+    const orcamento = montarOrcamento();
+    if (!orcamento) return;
+    setSalvando(true);
+    try {
+      await update("orcamentos", (anteriores) => {
+        const existe = anteriores.some((item) => String(item.id) === String(orcamento.id));
+        return existe ? anteriores.map((item) => String(item.id) === String(orcamento.id) ? orcamento : item) : [...anteriores, orcamento];
+      });
+      setOrcamentoAtual(orcamento);
+      setMensagem(`Orçamento ${orcamento.numero} salvo com sucesso.`);
+    } catch (error) {
+      window.alert(`Não foi possível salvar o orçamento: ${error.message}`);
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  const excluirOrcamento = async (orcamento) => {
+    if (orcamento.pedidoId) {
+      window.alert("Este orçamento já foi convertido em pedido e não pode ser excluído.");
+      return;
+    }
+    if (!confirmarExclusao(`o orçamento ${orcamento.numero || ""}`.trim())) return;
+    try {
+      await update("orcamentos", (anteriores) => anteriores.filter((item) => String(item.id) !== String(orcamento.id)));
+      if (String(orcamentoAtual?.id) === String(orcamento.id)) resetarFormulario();
+      else setMensagem(`Orçamento ${orcamento.numero} excluído.`);
+    } catch (error) {
+      window.alert(`Não foi possível excluir o orçamento: ${error.message}`);
+    }
+  };
+
+  const imprimirOrcamento = (registro = null) => {
+    const orcamento = registro || montarOrcamento();
+    if (orcamento) setOrcamentoParaImpressao(orcamento);
+  };
+
+  const converterEmPedido = async (registro = null) => {
+    const orcamento = registro || montarOrcamento();
+    if (!orcamento) return;
+    if (orcamento.pedidoId) {
+      const pedidoExistente = (db.ordens || []).find((item) => String(item.id) === String(orcamento.pedidoId));
+      if (pedidoExistente) onAbrirPedido(pedidoExistente);
+      else window.alert("O pedido vinculado a este orçamento não foi encontrado.");
+      return;
+    }
+    await converterOrcamentoEmPedido(orcamento);
+  };
+
+  const converterOrcamentoEmPedido = async (orcamento) => {
+    const pedidoId = uid();
+    const numeroPedido = String(Math.max(0, ...(db.ordens || [])
+      .filter((item) => !item.lancamentoManual)
+      .map((item) => Number(String(item.numero || "").replace(/\D/g, "")) || 0)) + 1).padStart(4, "0");
+    const pedido = {
+      id: pedidoId,
+      numero: numeroPedido,
+      data: todayISO(),
+      clienteId: orcamento.clienteId,
+      clienteNome: orcamento.clienteNome,
+      itens: (orcamento.itens || []).map((item) => ({ ...item, uidLine: item.uidLine || uid() })),
+      subtotal: Number(orcamento.subtotal || orcamento.total || 0),
+      desconto: 0,
+      total: Number(orcamento.total || 0),
+      statusOS: "pendente",
+      formaPagamento: "Dinheiro",
+      statusPagamento: "pendente",
+      valorPago: 0,
+      dataVencimento: null,
+      parcelas: null,
+      origemOrcamentoId: orcamento.id,
+    };
+    const orcamentoConvertido = { ...orcamento, status: "convertido", pedidoId, convertidoEm: todayISO() };
+    try {
+      await update("orcamentos", (anteriores) => {
+        const existe = anteriores.some((item) => String(item.id) === String(orcamento.id));
+        return existe
+          ? anteriores.map((item) => String(item.id) === String(orcamento.id) ? orcamentoConvertido : item)
+          : [...anteriores, orcamentoConvertido];
+      });
+      await update("ordens", (anteriores) => [...anteriores, pedido]);
+      onAbrirPedido(pedido);
+    } catch (error) {
+      window.alert(`Não foi possível converter o orçamento em pedido: ${error.message}`);
+    }
+  };
+
+  const clienteImpressao = orcamentoParaImpressao
+    ? (db.clientes || []).find((cliente) => String(cliente.id) === String(orcamentoParaImpressao.clienteId)) || orcamentoParaImpressao.clienteSnapshot || {}
+    : {};
+
+  return (
+    <div className="space-y-6">
+      {orcamentoParaImpressao && <OrcamentoPrintModal orcamento={orcamentoParaImpressao} empresa={empresa} cliente={clienteImpressao} onClose={() => setOrcamentoParaImpressao(null)} />}
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="headline text-2xl font-bold text-slate-900">Orçamentos</h1>
+          <p className="mt-1 text-sm text-slate-500">Selecione o cliente, inclua os itens e converta em pedido quando aprovado.</p>
+        </div>
+        <button type="button" onClick={resetarFormulario} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+          <FilePlus2 size={16} /> Novo orçamento
+        </button>
+      </header>
+
+      <div className="space-y-5">
+        {mensagem && <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{mensagem}</div>}
+        {convertido && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">Este orçamento já foi convertido em pedido. Use o botão abaixo para abrir o pedido.</div>}
+        <fieldset disabled={salvando || convertido} className="min-w-0 space-y-5">
+          <ClienteDocumento db={db} clienteId={clienteId} setClienteId={setClienteId} />
+          <ItensDocumento db={db} itens={itens} setItens={setItens} titulo="Itens do orçamento" comDesconto={false} />
+          <ObservacoesDocumento tipo="orçamento" observacao={observacao} setObservacao={setObservacao} />
+        </fieldset>
+        <div className="flex flex-wrap justify-end gap-3">
+          <button type="button" onClick={salvarOrcamento} disabled={salvando || convertido || !clienteId || !filtrarItensValidos(itens).length} className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-800 disabled:cursor-not-allowed disabled:opacity-40"><CheckCircle2 size={16} /> {salvando ? "Salvando..." : "Salvar orçamento"}</button>
+          <button type="button" onClick={() => converterEmPedido()} disabled={!clienteId || !filtrarItensValidos(itens).length} className="inline-flex items-center justify-center gap-2 rounded-xl bg-orange-700 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"><ExternalLink size={16} /> {convertido ? "Abrir pedido" : "Converter para pedido"}</button>
+          <button type="button" onClick={() => imprimirOrcamento()} disabled={!clienteId || !filtrarItensValidos(itens).length} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"><Printer size={16} /> Imprimir</button>
+          {orcamentoAtual && !convertido && <button type="button" onClick={() => excluirOrcamento(orcamentoAtual)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-50"><Trash2 size={16} /> Excluir orçamento</button>}
+        </div>
+
+        <Card className="overflow-hidden p-0">
+          <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4"><div><h2 className="font-semibold text-slate-800">Orçamentos salvos</h2><p className="mt-0.5 text-xs text-slate-500">{orcamentos.length} orçamento(s) registrado(s).</p></div></div>
+          {orcamentos.length === 0 ? (
+            <EmptyState text="Nenhum orçamento salvo ainda." />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px] text-sm">
+                <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3 text-left">Número</th>
+                    <th className="px-4 py-3 text-left">Data</th>
+                    <th className="px-4 py-3 text-left">Cliente</th>
+                    <th className="px-4 py-3 text-left">CNPJ/CPF</th>
+                    <th className="px-4 py-3 text-right">Total</th>
+                    <th className="px-4 py-3 text-left">Status</th>
+                    <th className="px-4 py-3 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {orcamentos.map((orcamento) => {
+                    const cliente = (db.clientes || []).find((item) => String(item.id) === String(orcamento.clienteId)) || orcamento.clienteSnapshot || {};
+                    return (
+                      <tr key={orcamento.id}>
+                        <td className="px-4 py-3 font-medium">{orcamento.numero}</td>
+                        <td className="px-4 py-3 text-slate-500">{fmtDate(orcamento.data)}</td>
+                        <td className="px-4 py-3">{orcamento.clienteNome}</td>
+                        <td className="px-4 py-3 text-slate-500">{cliente.cpfCnpj || "-"}</td>
+                        <td className="px-4 py-3 text-right font-semibold">{brl(orcamento.total)}</td>
+                        <td className="px-4 py-3">{orcamento.pedidoId ? <Badge tone="green">Convertido</Badge> : <Badge tone="amber">{orcamento.status === "pendente" ? "Pendente" : "Aberto"}</Badge>}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end gap-3">
+                            <button type="button" onClick={() => carregarOrcamento(orcamento)} className="text-slate-400 hover:text-emerald-700" title="Abrir orçamento"><Pencil size={16} /></button>
+                            <button type="button" onClick={() => imprimirOrcamento(orcamento)} className="text-slate-400 hover:text-orange-700" title="Imprimir orçamento"><Printer size={16} /></button>
+                            <button type="button" onClick={() => converterEmPedido(orcamento)} className="text-slate-400 hover:text-orange-700" title={orcamento.pedidoId ? "Abrir pedido" : "Converter para pedido"}><ExternalLink size={16} /></button>
+                            {!orcamento.pedidoId && <button type="button" onClick={() => excluirOrcamento(orcamento)} className="text-slate-400 hover:text-red-600" title="Excluir orçamento"><Trash2 size={16} /></button>}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Pedidos ----------
+function OrdensWorkspace({ db, update, empresa, ordemEmEdicao, setOrdemEmEdicao, podeEditarValor }) {
   const [formKey, setFormKey] = useState(0);
   const ordens = (db.ordens || []).filter((ordem) => !ordem.lancamentoManual);
   const pendentes = ordens.filter((ordem) => ["rascunho", "pendente", "estornado"].includes(ordem.statusOS)).length;
 
   const abrirNova = () => {
     setOrdemEmEdicao(null);
-    setProgramacaoInicial(null);
     setFormKey((value) => value + 1);
-    setModo("formulario");
-  };
-  const abrirEdicao = (ordem) => {
-    setOrdemEmEdicao(ordem);
-    setFormKey((value) => value + 1);
-    setModo("formulario");
-  };
-  const abrirLista = () => {
-    setOrdemEmEdicao(null);
-    setModo("lista");
   };
 
   return (
     <div className="space-y-6">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="headline text-2xl font-bold text-slate-900">{"Ordens de Servi\u00e7o"}</h1>
+          <h1 className="headline text-2xl font-bold text-slate-900">Pedidos</h1>
           <p className="mt-1 text-sm text-slate-500">
-            {modo === "lista" ? `${ordens.length} ordem(ns) cadastrada(s)${pendentes ? ` \u00b7 ${pendentes} pendente(s)` : ""}.` : ordemEmEdicao ? `Continuando a OS #${ordemEmEdicao.numero}.` : "Preencha os dados para registrar uma nova OS."}
+            {ordemEmEdicao ? `Continuando o pedido #${ordemEmEdicao.numero}.` : pendentes ? `${pendentes} pedido(s) em andamento.` : "Preencha os dados para registrar um novo pedido."}
           </p>
         </div>
-        <div className="flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
-          <button onClick={abrirNova} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition ${modo === "formulario" ? "bg-gradient-to-br from-orange-700 to-emerald-800 text-white" : "text-slate-500 hover:bg-slate-50"}`}>
-            <FilePlus2 size={16} /> Nova OS
-          </button>
-          <button onClick={abrirLista} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition ${modo === "lista" ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-50"}`}>
-            <ClipboardList size={16} /> Lista de OS
-          </button>
-        </div>
+        <button onClick={abrirNova} className="flex items-center gap-2 rounded-xl bg-gradient-to-br from-orange-700 to-emerald-800 px-4 py-2.5 text-sm font-semibold text-white shadow-sm">
+          <FilePlus2 size={16} /> Novo pedido
+        </button>
       </header>
 
-      <div className={modo === "formulario" ? "block" : "hidden"}>
-        <NovaOS
+      <div className="block">
+        <PedidoVenda
+          ReciboModal={ReciboOSModal}
           key={formKey}
           db={db}
           update={update}
           empresa={empresa}
           ordemEmEdicao={ordemEmEdicao}
-          programacaoInicial={programacaoInicial}
-          onFinalizarEdicao={(concluir) => {
-            setOrdemEmEdicao(null);
-            setProgramacaoInicial(null);
-            if (!concluir) setModo("lista");
+          onFinalizarEdicao={() => setOrdemEmEdicao(null)}
+          onConcluirFechado={() => setOrdemEmEdicao(null)}
+          onSelecionarPedido={(pedido) => {
+            setOrdemEmEdicao(pedido);
+            setFormKey((value) => value + 1);
           }}
-          onConcluirFechado={() => setModo("lista")}
           podeEditarValor={podeEditarValor}
           embedded
         />
       </div>
-      <div className={modo === "lista" ? "block" : "hidden"}>
-        <Ordens db={db} update={update} empresa={empresa} onEditarNaOS={abrirEdicao} embedded />
-      </div>
-    </div>
-  );
-}
-
-// ---------- Nova OS ----------
-function NovaOS({ db, update, empresa, ordemEmEdicao, programacaoInicial, onFinalizarEdicao, onConcluirFechado, podeEditarValor, embedded = false }) {
-  const [clienteId, setClienteId] = useState(db.clientes[0]?.id || "");
-  const [veiculoId, setVeiculoId] = useState("");
-  const [dadosVeiculo, setDadosVeiculo] = useState({ tipoVeiculo: "", marca: "", veiculo: "", cor: "", ano: "", placa: "", frota: "", motorista: "" });
-  const [buscaCliente, setBuscaCliente] = useState("");
-  const [seletorClienteAberto, setSeletorClienteAberto] = useState(false);
-  const [itens, setItens] = useState([]);
-  const [itemSel, setItemSel] = useState("");
-  const [descricaoItem, setDescricaoItem] = useState("");
-  const [valorItem, setValorItem] = useState("");
-  const [qtd, setQtd] = useState(1);
-  const [formaPagamento, setFormaPagamento] = useState("Dinheiro");
-  const [statusPagamento, setStatusPagamento] = useState("pago");
-  const [valorPago, setValorPago] = useState(0);
-  const [desconto, setDesconto] = useState("");
-  const [vencimento, setVencimento] = useState(todayISO());
-  const [qtdParcelas, setQtdParcelas] = useState(1);
-  const [funcionarioId, setFuncionarioId] = useState("");
-  const [editandoItem, setEditandoItem] = useState(null);
-  const [editForm, setEditForm] = useState({ descricao: "", valor: "", qtd: "" });
-  const [recibo, setRecibo] = useState(null);
-  const [dataProgramada, setDataProgramada] = useState(programacaoInicial?.data || "");
-  const [horaInicio, setHoraInicio] = useState(programacaoInicial?.horaInicio || "");
-  const [horaFim, setHoraFim] = useState(programacaoInicial?.horaFim || "");
-  const [observacao, setObservacao] = useState("");
-
-  useEffect(() => {
-    if (!ordemEmEdicao) return;
-    setClienteId(ordemEmEdicao.clienteId || "");
-    setVeiculoId(ordemEmEdicao.veiculoId || "");
-    setDadosVeiculo({
-      tipoVeiculo: ordemEmEdicao.tipoVeiculo || "",
-      marca: ordemEmEdicao.marca || "",
-      veiculo: ordemEmEdicao.veiculo || "",
-      cor: ordemEmEdicao.cor || "",
-      ano: ordemEmEdicao.ano || "",
-      placa: ordemEmEdicao.placa || "",
-      frota: ordemEmEdicao.frota || "",
-      motorista: ordemEmEdicao.motorista || "",
-    });
-    setBuscaCliente("");
-    setItens((ordemEmEdicao.itens || []).map((item) => ({ ...item, uidLine: item.uidLine || uid() })));
-    setFormaPagamento(ordemEmEdicao.formaPagamento || "Dinheiro");
-    setStatusPagamento(ordemEmEdicao.statusPagamento || "pendente");
-    setValorPago(Number(ordemEmEdicao.valorPago || 0));
-    setDesconto(String(ordemEmEdicao.desconto || ""));
-    setVencimento(ordemEmEdicao.dataVencimento || todayISO());
-    setQtdParcelas(ordemEmEdicao.parcelas?.length || 1);
-    setFuncionarioId(ordemEmEdicao.funcionarioId || "");
-    setDataProgramada(ordemEmEdicao.dataProgramada || "");
-    setHoraInicio(ordemEmEdicao.horaInicio || "");
-    setHoraFim(ordemEmEdicao.horaFim || "");
-    setObservacao(ordemEmEdicao.observacao || "");
-  }, [ordemEmEdicao]);
-
-  const catalogo = [
-    ...(db.servicos || []).map((item) => ({ ...item, tipo: "servico" })),
-    ...(db.produtos || []).map((item) => ({ ...item, tipo: "produto" })),
-  ].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
-  const clientesComCodigo = db.clientes.map((cliente, index) => ({ ...cliente, codigoExibicao: cliente.codigo || String(index + 1).padStart(4, "0") }));
-  const termoCliente = buscaCliente.trim().toLowerCase().replace(/^#/, "");
-  const clientesFiltrados = clientesComCodigo.filter((cliente) =>
-    !termoCliente
-    || cliente.nome.toLowerCase().includes(termoCliente)
-    || cliente.codigoExibicao.toLowerCase().includes(termoCliente)
-    || veiculosDoCliente(cliente).some((veiculo) => (veiculo.placa || "").toLowerCase().includes(termoCliente) || (veiculo.frota || "").toLowerCase().includes(termoCliente) || (veiculo.motorista || "").toLowerCase().includes(termoCliente))
-  );
-  const clienteSelecionado = db.clientes.find((cliente) => cliente.id === clienteId);
-  const veiculosDisponiveis = veiculosDoCliente(clienteSelecionado);
-  const subtotalItens = itens.reduce((s, i) => s + i.subtotal, 0);
-  const descontoAplicado = Math.min(Math.max(Number(desconto) || 0, 0), subtotalItens);
-  const total = Math.max(0, subtotalItens - descontoAplicado);
-  const mostraParcelas = formaPagamento === "Carteira";
-  const hasServico = itens.some((item) => item.tipo === "servico");
-
-  const addItem = () => {
-    const src = catalogo.find((c) => c.id === itemSel);
-    if (!src || qtd <= 0) return;
-    const precoCadastrado = src.tipo === "servico" ? src.preco : (src.precoVenda || src.precoCusto);
-    const preco = valorItem === "" ? Number(precoCadastrado || 0) : Math.max(0, Number(valorItem));
-    const quantidade = Number(qtd);
-    setItens((prev) => [
-      ...prev,
-      { uidLine: uid(), tipo: src.tipo, itemId: src.id, nome: src.nome, descricao: descricaoItem.trim() || src.nome, qtd: quantidade, precoUnit: preco, subtotal: preco * quantidade },
-    ]);
-    setItemSel("");
-    setDescricaoItem("");
-    setValorItem("");
-    setQtd(1);
-  };
-
-  const removeItem = (uidLine) => {
-    if (!confirmarExclusao("este item da OS")) return;
-    setItens((prev) => prev.filter((i) => i.uidLine !== uidLine));
-    if (editandoItem === uidLine) {
-      setEditandoItem(null);
-      setEditForm({ descricao: "", valor: "", qtd: "" });
-    }
-  };
-
-  const abrirEdicaoItem = (item) => {
-    setEditandoItem(item.uidLine);
-    setEditForm({ descricao: item.descricao || item.nome, valor: String(item.precoUnit), qtd: String(item.qtd) });
-  };
-
-  const salvarEdicaoItem = () => {
-    const valor = Math.max(0, Number(editForm.valor || 0));
-    const quantidade = Math.max(1, Number(editForm.qtd || 1));
-    const descricao = (editForm.descricao || "").trim() || "Item";
-
-    setItens((prev) =>
-      prev.map((item) =>
-        item.uidLine === editandoItem
-          ? { ...item, descricao, nome: descricao, precoUnit: valor, qtd: quantidade, subtotal: valor * quantidade }
-          : item
-      )
-    );
-    setEditandoItem(null);
-    setEditForm({ descricao: "", valor: "", qtd: "" });
-  };
-
-  const salvar = (concluir) => {
-    if (itens.length === 0 || !clienteId) return;
-    if (concluir && hasServico && !funcionarioId) return;
-    const programacaoCompleta = Boolean(dataProgramada && horaInicio && horaFim);
-    if (programacaoCompleta && timeToMinutes(horaFim) <= timeToMinutes(horaInicio)) {
-      window.alert("O horário final deve ser posterior ao horário inicial.");
-      return;
-    }
-    const conflito = programacaoCompleta && funcionarioId && db.ordens.some((item) =>
-      item.id !== ordemEmEdicao?.id
-      && item.dataProgramada === dataProgramada
-      && ["pendente", "concluido"].includes(item.statusOS)
-      && String(item.funcionarioId || "") === String(funcionarioId)
-      && timeToMinutes(horaInicio) < timeToMinutes(item.horaFim || "00:00")
-      && timeToMinutes(horaFim) > timeToMinutes(item.horaInicio || "00:00")
-    );
-    if (conflito) {
-      window.alert("Este responsável já possui uma OS programada neste horário.");
-      return;
-    }
-    const cliente = db.clientes.find((c) => c.id === clienteId);
-    const numero = ordemEmEdicao?.numero || (db.ordens.filter((item) => !item.lancamentoManual).length + 1).toString().padStart(4, "0");
-    const ordemId = ordemEmEdicao?.id || uid();
-    const vendaCarteira = formaPagamento === "Carteira";
-    const statusFinanceiro = vendaCarteira ? "pendente" : "pago";
-    const ordem = {
-      id: ordemId,
-      numero,
-      data: todayISO(),
-      dataProgramada: dataProgramada || null,
-      horaInicio: dataProgramada && horaInicio ? horaInicio : null,
-      horaFim: dataProgramada && horaFim ? horaFim : null,
-      observacao: observacao.trim(),
-      clienteId,
-      clienteNome: cliente?.nome || "Consumidor",
-      veiculoId,
-      tipoVeiculo: dadosVeiculo.tipoVeiculo || "",
-      veiculo: dadosVeiculo.veiculo || "",
-      marca: dadosVeiculo.marca || "",
-      cor: dadosVeiculo.cor || "",
-      ano: dadosVeiculo.ano || "",
-      placa: dadosVeiculo.placa || "",
-      frota: dadosVeiculo.frota || "",
-      motorista: dadosVeiculo.motorista || "",
-      itens,
-      subtotal: subtotalItens,
-      desconto: descontoAplicado,
-      total,
-      statusOS: concluir ? "concluido" : "pendente",
-      formaPagamento,
-      funcionarioId: hasServico ? funcionarioId : null,
-      funcionarioNome: hasServico ? db.funcionarios.find((f) => f.id === funcionarioId)?.nome || "" : "",
-      statusPagamento: concluir ? statusFinanceiro : "pendente",
-      valorPago: concluir && !vendaCarteira ? total : 0,
-      dataVencimento: concluir && vendaCarteira ? (vencimento || todayISO()) : null,
-      parcelas: concluir && vendaCarteira ? gerarParcelas(ordemId, total, qtdParcelas, vencimento || todayISO()) : null,
-    };
-    update("ordens", (prev) => ordemEmEdicao ? prev.map((item) => item.id === ordemEmEdicao.id ? ordem : item) : [...prev, ordem]);
-    const quantidadePorProduto = (lista) => lista.filter((item) => item.tipo === "produto").reduce((acc, item) => {
-      acc[item.itemId] = (acc[item.itemId] || 0) + Number(item.qtd || 0);
-      return acc;
-    }, {});
-    const produtosAntes = quantidadePorProduto(ordemEmEdicao?.itens || []);
-    const produtosDepois = quantidadePorProduto(itens);
-    const antesConcluida = ordemEmEdicao && !["rascunho", "pendente", "estornado"].includes(ordemEmEdicao.statusOS);
-    update("produtos", (prev) => prev.map((produto) => {
-      const quantidadeAntes = antesConcluida ? Number(produtosAntes[produto.id] || 0) : 0;
-      const quantidadeDepois = concluir ? Number(produtosDepois[produto.id] || 0) : 0;
-      if (!quantidadeAntes && !quantidadeDepois) return produto;
-      return { ...produto, quantidade: Math.max(0, Number(produto.quantidade) + quantidadeAntes - quantidadeDepois) };
-    }));
-    if (concluir) setRecibo({ ordem, cliente });
-    setItens([]);
-    setValorPago(0);
-    setDesconto("");
-    setStatusPagamento("pago");
-    setFormaPagamento("Dinheiro");
-    setVencimento(todayISO());
-    setQtdParcelas(1);
-    setFuncionarioId("");
-    setVeiculoId("");
-    setDadosVeiculo({ tipoVeiculo: "", marca: "", veiculo: "", cor: "", ano: "", placa: "", frota: "", motorista: "" });
-    onFinalizarEdicao?.(concluir);
-  };
-
-  return (
-    <div className="w-full space-y-6">
-      {recibo && <ReciboOSModal ordem={recibo.ordem} empresa={empresa} cliente={recibo.cliente} onClose={() => { setRecibo(null); onConcluirFechado?.(); }} />}
-      {!embedded && <header>
-        <h1 className="headline text-2xl font-bold text-slate-900">{ordemEmEdicao ? `Continuar OS #${ordemEmEdicao.numero}` : "Nova ordem de serviço"}</h1>
-        <p className="text-slate-500 text-sm mt-1">{ordemEmEdicao ? "Edite os itens e conclua a venda quando estiver pronta." : "Registre uma venda de serviço e/ou produto."}</p>
-      </header>}
-
-      <Card className="p-5 space-y-4">
-        <div className="flex justify-end">
-          <a
-            href="https://issprudente.sp.gov.br/contrib/Account/Login"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-xl border border-emerald-700 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-100"
-          >
-            <ExternalLink size={16} /> Emitir nota de serviço
-          </a>
-        </div>
-        <div className="rounded-2xl border border-red-100 bg-red-50/60 p-4">
-          <div className="mb-3 flex items-center gap-2 text-sm font-bold text-red-800"><CalendarDays size={17} /> Programação da OS</div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Field label="Data programada (opcional)"><input type="date" className={inputCls} value={dataProgramada} onChange={(e) => setDataProgramada(e.target.value)} /></Field>
-            <Field label="Hora inicial (opcional)"><input type="time" className={inputCls} value={horaInicio} onChange={(e) => setHoraInicio(e.target.value)} /></Field>
-            <Field label="Hora final (opcional)"><input type="time" className={inputCls} value={horaFim} onChange={(e) => setHoraFim(e.target.value)} /></Field>
-          </div>
-          <p className="mt-2 text-xs text-slate-500">A OS aparecerá na Agenda tanto em Carteira quanto concluída; o financeiro seguirá a forma de pagamento escolhida.</p>
-        </div>
-        <Field label="Cliente">
-          <button
-            type="button"
-            onClick={() => { setBuscaCliente(""); setSeletorClienteAberto(true); }}
-            className={inputCls + " flex items-center justify-between text-left"}
-          >
-            <span>{clienteId ? (() => { const cliente = clientesComCodigo.find((item) => item.id === clienteId); return cliente ? `#${cliente.codigoExibicao} · ${cliente.nome}` : "Selecionar cliente"; })() : "Selecionar cliente"}</span>
-            <Search size={17} className="text-emerald-700" />
-          </button>
-        </Field>
-
-        <Field label="Observações da OS">
-          <textarea rows="3" className={inputCls} value={observacao} onChange={(e) => setObservacao(e.target.value)} placeholder="Informações adicionais para o atendimento" />
-        </Field>
-
-        {seletorClienteAberto && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
-            <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl">
-              <div className="mb-4 flex items-center justify-between">
-                <div>
-                  <h2 className="font-semibold text-slate-900">Selecionar cliente</h2>
-                  <p className="text-xs text-slate-500">Pesquise pelo nome, código, placa ou motorista.</p>
-                </div>
-                <button type="button" onClick={() => setSeletorClienteAberto(false)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"><X size={18} /></button>
-              </div>
-              <div className="relative mb-3">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input autoFocus className={inputCls + " pl-9"} placeholder="Nome, código, placa ou motorista" value={buscaCliente} onChange={(e) => setBuscaCliente(e.target.value)} />
-              </div>
-              <div className="max-h-72 overflow-y-auto rounded-xl border border-slate-200 p-1">
-                {clientesFiltrados.length === 0 ? (
-                  <div className="p-6 text-center text-sm text-slate-400">Nenhum cliente encontrado.</div>
-                ) : clientesFiltrados.map((cliente) => (
-                  <button
-                    type="button"
-                    key={cliente.id}
-                    onClick={() => {
-                      const primeiroVeiculo = veiculosDoCliente(cliente)[0] || {};
-                      setClienteId(cliente.id);
-                      setVeiculoId(primeiroVeiculo.id || "");
-                      setDadosVeiculo({ tipoVeiculo: primeiroVeiculo.tipoVeiculo || "", marca: primeiroVeiculo.marca || "", veiculo: primeiroVeiculo.veiculo || "", cor: primeiroVeiculo.cor || "", ano: primeiroVeiculo.ano || "", placa: primeiroVeiculo.placa || "", frota: primeiroVeiculo.frota || "", motorista: primeiroVeiculo.motorista || "" });
-                      setBuscaCliente("");
-                      setSeletorClienteAberto(false);
-                    }}
-                    className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-orange-50 hover:text-orange-700"
-                  >
-                    <span><strong>#{cliente.codigoExibicao}</strong> · {cliente.nome}</span>
-                    <span className="text-right text-xs text-slate-400">{veiculosDoCliente(cliente).length ? `${veiculosDoCliente(cliente).length} veículo(s)` : cliente.cpfCnpj || ""}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {veiculosDisponiveis.length > 0 && (
-          <Field label="Veículo desta ordem">
-            <select className={inputCls} value={veiculoId} onChange={(e) => {
-              const id = e.target.value;
-              const veiculo = veiculosDisponiveis.find((item) => item.id === id) || {};
-              setVeiculoId(id);
-              setDadosVeiculo({ tipoVeiculo: veiculo.tipoVeiculo || "", marca: veiculo.marca || "", veiculo: veiculo.veiculo || "", cor: veiculo.cor || "", ano: veiculo.ano || "", placa: veiculo.placa || "", frota: veiculo.frota || "", motorista: veiculo.motorista || "" });
-            }}>
-              <option value="">Preencher manualmente</option>
-              {veiculosDisponiveis.map((veiculo) => <option key={veiculo.id} value={veiculo.id}>{[veiculo.marca, veiculo.veiculo, veiculo.placa, veiculo.frota ? `Frota ${veiculo.frota}` : ""].filter(Boolean).join(" · ") || "Veículo sem identificação"}</option>)}
-            </select>
-          </Field>
-        )}
-
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <div className="mb-3">
-            <div className="text-sm font-semibold text-slate-700">Dados do veículo na OS</div>
-            <p className="text-xs text-slate-500">Preencha ou altere estes dados apenas para esta ordem de serviço.</p>
-          </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
-            <Field label="Tipo de veículo"><input className={inputCls} placeholder="Ex.: Carro" value={dadosVeiculo.tipoVeiculo} onChange={(e) => setDadosVeiculo((atual) => ({ ...atual, tipoVeiculo: e.target.value }))} /></Field>
-            <Field label="Marca"><input className={inputCls} placeholder="Ex.: Toyota" value={dadosVeiculo.marca} onChange={(e) => setDadosVeiculo((atual) => ({ ...atual, marca: e.target.value }))} /></Field>
-            <Field label="Modelo"><input className={inputCls} placeholder="Ex.: Corolla" value={dadosVeiculo.veiculo} onChange={(e) => setDadosVeiculo((atual) => ({ ...atual, veiculo: e.target.value }))} /></Field>
-            <Field label="Cor"><input className={inputCls} placeholder="Ex.: Prata" value={dadosVeiculo.cor} onChange={(e) => setDadosVeiculo((atual) => ({ ...atual, cor: e.target.value }))} /></Field>
-            <Field label="Ano"><input inputMode="numeric" maxLength={4} className={inputCls} placeholder="Ex.: 2024" value={dadosVeiculo.ano} onChange={(e) => setDadosVeiculo((atual) => ({ ...atual, ano: e.target.value.replace(/\D/g, "").slice(0, 4) }))} /></Field>
-            <Field label="Placa"><input maxLength={8} className={inputCls} placeholder="Ex.: ABC1D23" value={dadosVeiculo.placa} onChange={(e) => setDadosVeiculo((atual) => ({ ...atual, placa: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 7) }))} /></Field>
-            <Field label="Frota"><input className={inputCls} placeholder="Ex.: 001" value={dadosVeiculo.frota} onChange={(e) => setDadosVeiculo((atual) => ({ ...atual, frota: e.target.value }))} /></Field>
-            <Field label="Motorista/Responsável"><input className={inputCls} value={dadosVeiculo.motorista} onChange={(e) => setDadosVeiculo((atual) => ({ ...atual, motorista: e.target.value }))} /></Field>
-          </div>
-        </div>
-
-        <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 space-y-3">
-          <div className="text-sm font-semibold text-slate-700">Adicionar item</div>
-          <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
-            <div className="sm:col-span-3">
-              <Field label="Item">
-                <select className={inputCls} value={itemSel} onChange={(e) => {
-                  const id = e.target.value;
-                  const item = catalogo.find((registro) => registro.id === id);
-                  setItemSel(id);
-                  setDescricaoItem(item?.nome || "");
-                  setValorItem(id ? String(item?.tipo === "servico" ? item?.preco || 0 : item?.precoVenda || item?.precoCusto || 0) : "");
-                }}>
-                  <option value="">Selecione...</option>
-                  {catalogo.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nome}
-                      {c.tipo === "produto" ? ` (${c.quantidade} ${c.unidade} em estoque)` : ""}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            </div>
-            <div className="sm:col-span-3">
-              <Field label="Descrição na OS">
-                <input className={inputCls} disabled={!itemSel} placeholder="Selecione um item e personalize a descrição" value={descricaoItem} onChange={(e) => setDescricaoItem(e.target.value)} />
-              </Field>
-            </div>
-            <Field label="Valor">
-              <input type="number" min="0" step="0.01" disabled={!podeEditarValor} className={inputCls + " disabled:cursor-not-allowed disabled:bg-slate-100"} value={valorItem} onChange={(e) => setValorItem(e.target.value)} />
-            </Field>
-            <Field label="Qtd">
-              <input type="number" min="1" className={inputCls} value={qtd} onChange={(e) => setQtd(e.target.value)} />
-            </Field>
-          </div>
-          <button onClick={addItem} disabled={!itemSel} className="flex items-center gap-1.5 text-sm font-semibold text-emerald-800 disabled:text-slate-300">
-            <Plus size={16} /> Adicionar à ordem
-          </button>
-        </div>
-
-        {itens.length > 0 && (
-          <div className="divide-y divide-slate-100">
-            {itens.map((i) => (
-              <div key={i.uidLine} className="py-3">
-                {editandoItem === i.uidLine ? (
-                  <div className="space-y-2 rounded-xl border border-orange-200 bg-orange-50/70 p-3">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      <Field label="Descrição">
-                        <input className={inputCls} value={editForm.descricao} onChange={(e) => setEditForm((prev) => ({ ...prev, descricao: e.target.value }))} />
-                      </Field>
-                      <Field label="Valor">
-                        <input type="number" min="0" disabled={!podeEditarValor} className={inputCls + " disabled:cursor-not-allowed disabled:bg-slate-100"} value={editForm.valor} onChange={(e) => setEditForm((prev) => ({ ...prev, valor: e.target.value }))} />
-                      </Field>
-                      <Field label="Qtd">
-                        <input type="number" min="1" className={inputCls} value={editForm.qtd} onChange={(e) => setEditForm((prev) => ({ ...prev, qtd: e.target.value }))} />
-                      </Field>
-                    </div>
-                    <div className="flex gap-2">
-                      <button onClick={salvarEdicaoItem} className="rounded-lg bg-orange-700 px-3 py-2 text-sm font-semibold text-white">Salvar</button>
-                      <button onClick={() => { setEditandoItem(null); setEditForm({ descricao: "", valor: "", qtd: "" }); }} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-600">Cancelar</button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-between text-sm gap-3">
-                    <div>
-                      <span className="font-medium">{i.descricao || i.nome}</span>
-                      <span className="text-slate-400"> · {i.qtd}x {brl(i.precoUnit)}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold">{brl(i.subtotal)}</span>
-                      <button onClick={() => abrirEdicaoItem(i)} className="text-slate-400 hover:text-emerald-700" title="Editar item">
-                        <Pencil size={15} />
-                      </button>
-                      <button onClick={() => removeItem(i.uidLine)} className="text-slate-400 hover:text-red-500" title="Remover item">
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-            <div className="space-y-3 pt-3">
-              <div className="ml-auto max-w-xs">
-                <Field label="Desconto">
-                  <input type="number" min="0" max={subtotalItens} step="0.01" className={inputCls} placeholder="R$ 0,00" value={desconto} onChange={(e) => setDesconto(e.target.value)} />
-                </Field>
-              </div>
-              <div className="flex items-center justify-between font-bold text-slate-900">
-                <span>Total</span>
-                <div className="text-right">
-                  {descontoAplicado > 0 && <div className="text-xs font-normal text-slate-400 line-through">{brl(subtotalItens)}</div>}
-                  <span>{brl(total)}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {hasServico && (
-          <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2">
-            <Field label="Funcionário responsável">
-              <select className={inputCls} value={funcionarioId} onChange={(e) => setFuncionarioId(e.target.value)}>
-                <option value="">Selecione...</option>
-                {(db.funcionarios || []).map((funcionario) => (
-                  <option key={funcionario.id} value={funcionario.id}>{funcionario.nome}</option>
-                ))}
-              </select>
-            </Field>
-            <p className="text-xs text-slate-500">Obrigatório quando houver serviço na ordem.</p>
-          </div>
-        )}
-
-        <div className="pt-2 border-t border-slate-100 space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <Field label="Forma de pagamento">
-              <select className={inputCls} value={formaPagamento} onChange={(e) => {
-                const forma = e.target.value;
-                setFormaPagamento(forma);
-                setStatusPagamento(forma === "Carteira" ? "pendente" : "pago");
-                setValorPago(forma === "Carteira" ? 0 : total);
-              }}>
-                <option>Dinheiro</option>
-                <option>Pix</option>
-                <option>Cartão de Débito</option>
-                <option>Cartão de Crédito</option>
-                <option>Carteira</option>
-              </select>
-            </Field>
-            <Field label="Status do pagamento">
-              <select disabled className={inputCls + " disabled:cursor-not-allowed disabled:bg-slate-100"} value={formaPagamento === "Carteira" ? "pendente" : "pago"}>
-                <option value="pago">À vista</option>
-                <option value="pendente">A prazo</option>
-              </select>
-            </Field>
-            {mostraParcelas && (
-              <Field label="Parcelas">
-                <select className={inputCls} value={qtdParcelas} onChange={(e) => setQtdParcelas(Number(e.target.value))}>
-                  {Array.from({ length: 12 }, (_, i) => (
-                    <option key={i + 1} value={i + 1}>{`${i + 1}x`}</option>
-                  ))}
-                </select>
-              </Field>
-            )}
-          </div>
-
-          {mostraParcelas && (
-            <Field label="Vencimento inicial">
-              <input type="date" className={inputCls} value={vencimento} onChange={(e) => setVencimento(e.target.value)} />
-            </Field>
-          )}
-        </div>
-
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <button onClick={() => salvar(false)} disabled={itens.length === 0 || !clienteId} className="w-full rounded-xl border border-emerald-300 bg-white px-5 py-2.5 text-sm font-semibold text-emerald-800 disabled:opacity-40 sm:w-auto">
-            Salvar OS
-          </button>
-          <button onClick={() => salvar(true)} disabled={itens.length === 0 || !clienteId} className="w-full rounded-xl px-5 py-2.5 text-sm font-semibold transition hover:opacity-90 disabled:opacity-40 sm:w-auto" style={{ backgroundColor: "#9a3412", color: "#ffffff", border: "1px solid #7c2d12" }}>
-            Concluir OS
-          </button>
-        </div>
-      </Card>
     </div>
   );
 }
 
 // ---------- Ordens ----------
 function Ordens({ db, update, empresa, onEditarNaOS, embedded = false }) {
-  const [editandoOrdemId, setEditandoOrdemId] = useState(null);
   const [recibo, setRecibo] = useState(null);
   const [filtros, setFiltros] = useState({ busca: "", dataInicial: "", dataFinal: "" });
-  const [editForm, setEditForm] = useState({
-    clienteId: "",
-    funcionarioId: "",
-    formaPagamento: "Dinheiro",
-    statusPagamento: "pago",
-    valorPago: "",
-    dataVencimento: "",
-    itens: [],
-  });
-
-  const marcarPago = (id) =>
-    update("ordens", (prev) => prev.map((o) => (o.id === id ? { ...o, statusPagamento: "pago", valorPago: o.total } : o)));
-
-  const abrirEdicao = (ordem) => {
-    setEditandoOrdemId(ordem.id);
-    setEditForm({
-      clienteId: ordem.clienteId || "",
-      funcionarioId: ordem.funcionarioId || "",
-      formaPagamento: ordem.formaPagamento || "Dinheiro",
-      statusPagamento: ordem.statusPagamento || "pago",
-      valorPago: String(Math.min(Number(ordem.valorPago || 0), Number(ordem.total || 0))),
-      dataVencimento: ordem.dataVencimento || "",
-      itens: (ordem.itens || []).map((item) => ({ ...item, descricao: item.descricao || item.nome || "", precoUnit: Number(item.precoUnit || 0), qtd: Number(item.qtd || 1) })),
-    });
-  };
-
-  const cancelarEdicao = () => {
-    setEditandoOrdemId(null);
-    setEditForm({ clienteId: "", funcionarioId: "", formaPagamento: "Dinheiro", statusPagamento: "pago", valorPago: "", dataVencimento: "", itens: [] });
-  };
-
-  const atualizarItemEdicao = (uidLine, campo, valor) => {
-    setEditForm((prev) => ({
-      ...prev,
-      itens: prev.itens.map((item) => (item.uidLine === uidLine ? { ...item, [campo]: campo === "precoUnit" ? Number(valor || 0) : campo === "qtd" ? Math.max(1, Number(valor || 1)) : valor } : item)),
-    }));
-  };
-
-  const removerItemEdicao = (uidLine) => {
-    if (!confirmarExclusao("este item da OS")) return;
-    setEditForm((prev) => ({ ...prev, itens: prev.itens.filter((item) => item.uidLine !== uidLine) }));
-  };
-
-  const salvarEdicao = (concluir = false) => {
-    if (!editandoOrdemId) return;
-    const ordemAtual = db.ordens.find((o) => o.id === editandoOrdemId);
-    if (!ordemAtual) return;
-    const itensValidos = editForm.itens.filter((item) => item && item.descricao && Number(item.qtd || 1) > 0);
-    if (!itensValidos.length) return;
-
-    const hasServico = itensValidos.some((item) => item.tipo === "servico");
-    if ((concluir || !["rascunho", "pendente", "estornado"].includes(ordemAtual.statusOS)) && hasServico && !editForm.funcionarioId) return;
-
-    const totalEditado = itensValidos.reduce((s, item) => s + Number(item.precoUnit || 0) * Number(item.qtd || 1), 0);
-    const vendaCarteira = editForm.formaPagamento === "Carteira";
-    const permanecePendente = ["rascunho", "pendente", "estornado"].includes(ordemAtual.statusOS) && !concluir;
-    const statusPagamento = permanecePendente || vendaCarteira ? "pendente" : "pago";
-    const valorPago = permanecePendente || vendaCarteira ? 0 : totalEditado;
-    const dataVencimento = !permanecePendente && vendaCarteira ? editForm.dataVencimento || todayISO() : null;
-
-    const produtosAntes = (ordemAtual.itens || []).filter((item) => item.tipo === "produto").reduce((acc, item) => {
-      acc[item.itemId] = (acc[item.itemId] || 0) + Number(item.qtd || 1);
-      return acc;
-    }, {});
-    const produtosDepois = itensValidos.filter((item) => item.tipo === "produto").reduce((acc, item) => {
-      acc[item.itemId] = (acc[item.itemId] || 0) + Number(item.qtd || 1);
-      return acc;
-    }, {});
-
-    update("ordens", (prev) =>
-      prev.map((o) => {
-        if (o.id !== editandoOrdemId) return o;
-        const cliente = db.clientes.find((c) => c.id === editForm.clienteId);
-        const funcionario = (db.funcionarios || []).find((f) => f.id === editForm.funcionarioId);
-        return {
-          ...o,
-          clienteId: editForm.clienteId,
-          clienteNome: cliente?.nome || o.clienteNome || "Consumidor",
-          itens: itensValidos.map((item) => ({ ...item, subtotal: Number(item.precoUnit || 0) * Number(item.qtd || 1) })),
-          total: totalEditado,
-          statusOS: concluir ? "concluido" : (o.statusOS || "concluido"),
-          formaPagamento: editForm.formaPagamento,
-          funcionarioId: hasServico ? editForm.funcionarioId : null,
-          funcionarioNome: hasServico ? funcionario?.nome || "" : "",
-          statusPagamento,
-          valorPago,
-          dataVencimento,
-          parcelas: vendaCarteira
-            ? (!["rascunho", "pendente", "estornado"].includes(o.statusOS) && Array.isArray(o.parcelas) && o.parcelas.length
-              ? o.parcelas
-              : gerarParcelas(o.id, totalEditado, o.parcelas?.length || 1, dataVencimento))
-            : null,
-        };
-      })
-    );
-
-    update("produtos", (prev) =>
-      prev.map((p) => {
-        const antes = Number(produtosAntes[p.id] || 0);
-        const depois = Number(produtosDepois[p.id] || 0);
-        if (!antes && !depois) return p;
-        if (["rascunho", "pendente", "estornado"].includes(ordemAtual.statusOS) && !concluir) return p;
-        if (["rascunho", "pendente", "estornado"].includes(ordemAtual.statusOS) && concluir) return { ...p, quantidade: Math.max(0, Number(p.quantidade) - depois) };
-        return { ...p, quantidade: Math.max(0, Number(p.quantidade) + (antes - depois)) };
-      })
-    );
-
-    if (concluir) {
-      const cliente = db.clientes.find((item) => item.id === editForm.clienteId) || {};
-      const funcionario = (db.funcionarios || []).find((item) => item.id === editForm.funcionarioId);
-      setRecibo({
-        cliente,
-        ordem: {
-          ...ordemAtual,
-          clienteId: editForm.clienteId,
-          clienteNome: cliente.nome || ordemAtual.clienteNome,
-          funcionarioNome: funcionario?.nome || "",
-          itens: itensValidos.map((item) => ({ ...item, subtotal: Number(item.precoUnit || 0) * Number(item.qtd || 1) })),
-          total: totalEditado,
-          statusOS: "concluido",
-          formaPagamento: editForm.formaPagamento,
-          statusPagamento,
-          valorPago,
-          dataVencimento,
-        },
-      });
-    }
-    cancelarEdicao();
-  };
-
   const excluir = (id) => {
     const ordem = db.ordens.find((o) => o.id === id);
     if (!ordem) return;
@@ -2281,6 +1964,7 @@ function Ordens({ db, update, empresa, onEditarNaOS, embedded = false }) {
       statusPagamento: "pendente",
       valorPago: 0,
       parcelas: null,
+      pagamentos: Array.isArray(item.pagamentos) ? item.pagamentos.map((pagamento) => ({ ...pagamento, parcelas: pagamento.parcelas.map((parcela) => ({ ...parcela, status: "pendente", valorPago: 0, dataBaixa: null, formaPagamentoBaixa: null })) })) : undefined,
       dataEstorno: todayISO(),
     } : item));
   };
@@ -2308,13 +1992,13 @@ function Ordens({ db, update, empresa, onEditarNaOS, embedded = false }) {
     <div className="space-y-6">
       {recibo && <ReciboOSModal ordem={recibo.ordem} empresa={empresa} cliente={recibo.cliente} onClose={() => setRecibo(null)} />}
       {!embedded && <header>
-        <h1 className="headline text-2xl font-bold text-slate-900">Ordens de serviço</h1>
-        <p className="text-slate-500 text-sm mt-1">{lista.length} ordem(ns) encontrada(s).</p>
+        <h1 className="headline text-2xl font-bold text-slate-900">Pedidos</h1>
+        <p className="text-slate-500 text-sm mt-1">{lista.length} pedido(s) encontrado(s).</p>
       </header>}
 
       <Card className="p-5">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_180px_180px_auto] md:items-end">
-          <Field label="Cliente, OS, produto ou serviço">
+          <Field label="Cliente, pedido, produto ou serviço">
             <div className="relative">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input className={inputCls + " pl-9"} placeholder="Digite para pesquisar..." value={filtros.busca} onChange={(e) => setFiltros((prev) => ({ ...prev, busca: e.target.value }))} />
@@ -2330,87 +2014,9 @@ function Ordens({ db, update, empresa, onEditarNaOS, embedded = false }) {
         </div>
       </Card>
 
-      {editandoOrdemId && (
-        <Card className="p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-slate-800">Editar ordem de serviço</h2>
-            <button onClick={cancelarEdicao} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Field label="Cliente">
-              <select className={inputCls} value={editForm.clienteId} onChange={(e) => setEditForm((prev) => ({ ...prev, clienteId: e.target.value }))}>
-                {db.clientes.map((cliente) => (
-                  <option key={cliente.id} value={cliente.id}>{cliente.nome}</option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Funcionário">
-              <select className={inputCls} value={editForm.funcionarioId} onChange={(e) => setEditForm((prev) => ({ ...prev, funcionarioId: e.target.value }))}>
-                <option value="">Selecione...</option>
-                {(db.funcionarios || []).map((funcionario) => (
-                  <option key={funcionario.id} value={funcionario.id}>{funcionario.nome}</option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Forma de pagamento">
-              <select className={inputCls} value={editForm.formaPagamento} onChange={(e) => {
-                const formaPagamento = e.target.value;
-                setEditForm((prev) => ({ ...prev, formaPagamento, statusPagamento: formaPagamento === "Carteira" ? "pendente" : "pago" }));
-              }}>
-                <option>Dinheiro</option>
-                <option>Pix</option>
-                <option>Cartão de Débito</option>
-                <option>Cartão de Crédito</option>
-                <option>Carteira</option>
-              </select>
-            </Field>
-            <Field label="Status">
-              <select disabled className={inputCls + " disabled:cursor-not-allowed disabled:bg-slate-100"} value={editForm.formaPagamento === "Carteira" ? "pendente" : "pago"}>
-                <option value="pago">À vista</option>
-                <option value="pendente">A prazo</option>
-              </select>
-            </Field>
-          </div>
-
-          {editForm.formaPagamento === "Carteira" && <Field label="Vencimento">
-            <input type="date" className={inputCls} value={editForm.dataVencimento} onChange={(e) => setEditForm((prev) => ({ ...prev, dataVencimento: e.target.value }))} />
-          </Field>}
-
-          <div className="space-y-2">
-            <div className="text-sm font-semibold text-slate-700">Itens da ordem</div>
-            {editForm.itens.map((item) => (
-              <div key={item.uidLine} className="rounded-xl border border-slate-200 p-3 space-y-2">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                  <Field label="Descrição">
-                    <input className={inputCls} value={item.descricao || ""} onChange={(e) => atualizarItemEdicao(item.uidLine, "descricao", e.target.value)} />
-                  </Field>
-                  <Field label="Valor">
-                    <input type="number" min="0" className={inputCls} value={item.precoUnit} onChange={(e) => atualizarItemEdicao(item.uidLine, "precoUnit", e.target.value)} />
-                  </Field>
-                  <Field label="Qtd">
-                    <input type="number" min="1" className={inputCls} value={item.qtd} onChange={(e) => atualizarItemEdicao(item.uidLine, "qtd", e.target.value)} />
-                  </Field>
-                </div>
-                <div className="flex justify-end">
-                  <button onClick={() => removerItemEdicao(item.uidLine)} className="text-sm text-red-500 hover:text-red-600">Remover item</button>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex justify-end gap-2">
-            <button onClick={() => salvarEdicao(false)} className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700">Salvar alterações</button>
-            {["rascunho", "pendente", "estornado"].includes(db.ordens.find((ordem) => ordem.id === editandoOrdemId)?.statusOS) && (
-              <button onClick={() => salvarEdicao(true)} className="rounded-xl px-4 py-2.5 text-sm font-semibold" style={{ backgroundColor: "#9a3412", color: "#ffffff", border: "1px solid #7c2d12" }}>Concluir OS</button>
-            )}
-          </div>
-        </Card>
-      )}
-
       <Card className="p-0 overflow-hidden">
         {lista.length === 0 ? (
-          <EmptyState text="Nenhuma ordem encontrada para os filtros informados." />
+          <EmptyState text="Nenhum pedido encontrado para os filtros informados." />
         ) : (
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
@@ -2418,10 +2024,9 @@ function Ordens({ db, update, empresa, onEditarNaOS, embedded = false }) {
                 <th className="text-left px-4 py-3">Nº</th>
                 <th className="text-left px-4 py-3">Data</th>
                 <th className="text-left px-4 py-3">Cliente</th>
-                <th className="text-left px-4 py-3">Funcionário</th>
                 <th className="text-left px-4 py-3">Itens</th>
                 <th className="text-right px-4 py-3">Total</th>
-                <th className="text-left px-4 py-3">OS</th>
+                <th className="text-left px-4 py-3">Pedido</th>
                 <th className="text-left px-4 py-3">Financeiro</th>
                 <th className="text-right px-4 py-3">Ações</th>
               </tr>
@@ -2432,7 +2037,6 @@ function Ordens({ db, update, empresa, onEditarNaOS, embedded = false }) {
                   <td className="px-4 py-3 font-medium">#{o.numero}</td>
                   <td className="px-4 py-3 text-slate-500">{fmtDate(o.data)}</td>
                   <td className="px-4 py-3">{o.clienteNome}</td>
-                  <td className="px-4 py-3 text-slate-500">{o.funcionarioNome || "-"}</td>
                   <td className="px-4 py-3 text-slate-500">{o.itens.map((i) => i.descricao || i.nome).join(", ")}</td>
                   <td className="px-4 py-3 text-right font-semibold">{brl(o.total)}</td>
                   <td className="px-4 py-3">{["rascunho", "pendente", "estornado"].includes(o.statusOS) ? <Badge tone="amber">Pendente</Badge> : <Badge tone="green">Concluído</Badge>}</td>
@@ -2450,12 +2054,7 @@ function Ordens({ db, update, empresa, onEditarNaOS, embedded = false }) {
                       <button onClick={() => imprimir(o)} className="text-slate-400 hover:text-orange-700" title="Imprimir ou salvar recibo em PDF">
                         <Printer size={17} />
                       </button>
-                      {!["rascunho", "pendente", "estornado"].includes(o.statusOS) && o.formaPagamento !== "Carteira" && o.statusPagamento !== "pago" && (
-                        <button onClick={() => marcarPago(o.id)} className="text-emerald-600 hover:text-emerald-700" title="Marcar como pago">
-                          <CheckCircle2 size={17} />
-                        </button>
-                      )}
-                      {["rascunho", "pendente", "estornado"].includes(o.statusOS) && <button onClick={() => onEditarNaOS(o)} className="text-slate-400 hover:text-emerald-700" title="Continuar venda / editar OS"><Pencil size={16} /></button>}
+                      {["rascunho", "pendente", "estornado"].includes(o.statusOS) && <button onClick={() => onEditarNaOS(o)} className="text-slate-400 hover:text-emerald-700" title="Continuar venda / editar pedido"><Pencil size={16} /></button>}
                       {!["rascunho", "pendente", "estornado"].includes(o.statusOS) && <button onClick={() => estornar(o)} className="text-amber-600 hover:text-red-600" title="Estornar OS"><RotateCcw size={17} /></button>}
                       {["rascunho", "pendente", "estornado"].includes(o.statusOS) && <button onClick={() => excluir(o.id)} className="text-slate-400 hover:text-red-500" title="Excluir"><Trash2 size={16} /></button>}
                     </div>

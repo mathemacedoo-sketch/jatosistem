@@ -7,6 +7,7 @@ const COLLECTIONS = [
   "servicos",
   "produtos",
   "ordens",
+  "orcamentos",
   "contasPagar",
   "contatosRetorno",
 ];

@@ -75,6 +75,7 @@ button:focus-visible { outline: 2px solid #ef4444; outline-offset: 2px; }
 .app-input:focus { background: #fff; box-shadow: 0 0 0 3px rgb(239 68 68 / 13%); }
 
 table { border-collapse: separate; border-spacing: 0; }
+.pedido-tabela { width: 100%; max-width: 100%; overflow-x: auto; contain: inline-size; }
 tbody tr { transition: background-color .16s ease; }
 tbody tr:hover { background: rgb(254 242 242 / 72%); }
 thead th { letter-spacing: .055em; font-weight: 700; }
