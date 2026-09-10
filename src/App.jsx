@@ -384,7 +384,10 @@ export default function App() {
         if (missingCompanyAdmins.length) {
           initialData.usuarios = [...(initialData.usuarios || []), ...missingCompanyAdmins];
         }
-        lastSynced.current = remoteInitialized ? initialData : {
+        lastSynced.current = remoteInitialized ? {
+          ...initialData,
+          usuarios: initialData.usuarios.filter((usuario) => !missingCompanyAdmins.some((admin) => admin.id === usuario.id)),
+        } : {
           ...initialData,
           empresas: [],
           usuarios: [],
@@ -402,18 +405,8 @@ export default function App() {
         const savedUi = loadSavedUi();
         const savedUser = (initialData.usuarios || []).find((usuario) => usuario.id === savedUi.usuarioId);
         if (savedUser) {
-          const allowedUserTabs = ["ordens", "orcamentos", "clientes"];
-          const managerTabs = ["dashboard", "ordens", "orcamentos", "clientes", "funcionarios", "catalogo", "receber", "pagar", "usuarios"];
-          const masterTabs = [...managerTabs, "empresas"];
-          const allowedTabs = savedUser.perfil === "master" ? masterTabs : savedUser.perfil === "gerente" ? managerTabs : allowedUserTabs;
-          const savedTab = ["nova-os", "agenda"].includes(savedUi.tab)
-            ? "ordens"
-            : ["servicos", "estoque"].includes(savedUi.tab) ? "catalogo" : savedUi.tab;
-          const restoredTab = allowedTabs.includes(savedTab)
-            ? savedTab
-            : savedUser.perfil === "usuario" ? "ordens" : "dashboard";
           setAuth({ usuario: savedUser.usuario, senha: "", empresaId: savedUser.empresaId || savedUi.empresaId || "", usuarioLogado: savedUser });
-          setTab(restoredTab);
+          setTab("inicio");
         }
         setLoaded(true);
         persistSnapshot(initialData).catch((error) => {
@@ -466,6 +459,12 @@ export default function App() {
   }, [loaded, auth.usuarioLogado, auth.empresaId, tab]);
 
   useEffect(() => {
+    if (["inicio", "login"].includes(tab)) {
+      setServicoAberto(false);
+      setCadastrosAberto(false);
+      setFinanceiroAberto(false);
+      return;
+    }
     if (["ordens", "orcamentos"].includes(tab)) setServicoAberto(true);
     if (["empresas", "usuarios", "clientes", "funcionarios", "catalogo"].includes(tab)) setCadastrosAberto(true);
     if (["receber", "pagar"].includes(tab)) setFinanceiroAberto(true);
@@ -574,7 +573,7 @@ export default function App() {
   const isMaster = authUser?.perfil === "master";
   const isGerente = authUser?.perfil === "gerente";
   const podeGerenciarUsuarios = isMaster || isGerente;
-  const tabsUsuario = ["ordens", "orcamentos", "clientes"];
+  const tabsUsuario = ["inicio", "ordens", "orcamentos", "clientes"];
   const podeAcessar = (tabId) => isMaster || isGerente || tabsUsuario.includes(tabId);
   const canShowCadastros = isMaster || isGerente || podeAcessar("clientes") || podeAcessar("funcionarios") || podeAcessar("catalogo") || podeGerenciarUsuarios;
   const canShowFinanceiro = podeAcessar("receber") || podeAcessar("pagar");
@@ -582,14 +581,14 @@ export default function App() {
   const entrar = () => {
     const isDefaultAdmin = auth.usuario.trim().toLowerCase() === DEFAULT_ADMIN_USERNAME;
     const user = usuarios.find((u) =>
-      u.usuario === auth.usuario
+      String(u.usuario || "").trim().toLowerCase() === auth.usuario.trim().toLowerCase()
       && u.senha === auth.senha
       && (!isDefaultAdmin || u.empresaId === auth.empresaId)
     );
     if (!user) return;
     const empresaId = user.empresaId || (auth.empresaId || empresas[0]?.id || "");
     setAuth((prev) => ({ ...prev, empresaId, usuarioLogado: user }));
-    setTab("ordens");
+    setTab("inicio");
   };
 
   const sair = () => {
@@ -627,6 +626,7 @@ export default function App() {
   }, [db, auth.empresaId, auth.usuarioLogado]);
 
   const NAV = [
+    { id: "inicio", label: "Início", icon: Building2 },
     { id: "dashboard", label: "Painel", icon: LayoutDashboard },
   ].filter((item) => podeAcessar(item.accessId || item.id));
 
@@ -827,6 +827,11 @@ export default function App() {
       {/* Main */}
       <main ref={mainRef} onScroll={saveScrollPosition} className="app-main flex-1 min-w-0 overflow-y-auto">
         <div className="max-w-7xl mx-auto p-6 md:p-8">
+          {tab === "inicio" && <section className="flex min-h-[calc(100dvh-4rem)] flex-col items-center justify-center gap-8 text-center" aria-label="Tela inicial">
+            <img src="/mm-erp-logo.png" alt="MM ERP" className="w-full max-w-sm rounded-2xl object-contain" />
+            <h1 className="headline text-4xl font-bold text-slate-900 md:text-5xl">Bem-Vindo</h1>
+            <p className="text-sm text-slate-500 md:text-base">Selecione uma opção no menu para começar.</p>
+          </section>}
           {tab === "dashboard" && podeAcessar("dashboard") && <Dashboard db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} stats={stats} update={update} authUser={authUser} />}
           {tab === "orcamentos" && podeAcessar("orcamentos") && <OrcamentosWorkspace db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresa={empresaAtiva} onAbrirPedido={(pedido) => { setOrdemEmEdicao(pedido); setTab("ordens"); }} />}
           {tab === "ordens" && <OrdensWorkspace db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresa={empresaAtiva} ordemEmEdicao={ordemEmEdicao} setOrdemEmEdicao={setOrdemEmEdicao} podeEditarValor={isMaster || isGerente} />}
@@ -887,7 +892,7 @@ function LoginScreen({ auth, setAuth, entrar, db }) {
 
   const entrarComCredenciais = () => {
     const user = (db.usuarios || []).find((u) =>
-      u.usuario === auth.usuario &&
+      String(u.usuario || "").trim().toLowerCase() === auth.usuario.trim().toLowerCase() &&
       u.senha === auth.senha &&
       (!isDefaultAdmin || u.empresaId === auth.empresaId)
     );
