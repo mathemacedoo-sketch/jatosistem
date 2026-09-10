@@ -12,6 +12,7 @@ const brl = (valor) => Number(valor || 0).toLocaleString("pt-BR", { style: "curr
 const inputCls = "app-input w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-red-200 disabled:bg-slate-100 disabled:text-slate-500";
 const formasPagamento = ["Dinheiro", "Pix", "Cartão de Débito", "Cartão de Crédito", "Boleto", "Transferência", "Carteira"];
 const pendente = (ordem) => !ordem || ["rascunho", "pendente", "estornado"].includes(ordem.statusOS);
+const estadoAutoSave = (clienteId, itens, desconto, observacao, pagamentos) => JSON.stringify({ clienteId, itens: filtrarItensValidos(itens).map(calcularItem), desconto, observacao, pagamentos });
 const Field = ({ label, children }) => <label className="block space-y-1 text-sm"><span className="font-medium text-slate-600">{label}</span>{children}</label>;
 
 export default function PedidoVenda({ db, update, empresa, ordemEmEdicao, onFinalizarEdicao, onConcluirFechado, podeEditarValor, ReciboModal, onSelecionarPedido }) {
@@ -24,6 +25,8 @@ export default function PedidoVenda({ db, update, empresa, ordemEmEdicao, onFina
   const [pesquisaPedidoAberta, setPesquisaPedidoAberta] = useState(false);
   const [buscaPedido, setBuscaPedido] = useState("");
   const [salvando, setSalvando] = useState(false);
+  const [salvamentoAutomatico, setSalvamentoAutomatico] = useState(false);
+  const [revisaoAutoSave, setRevisaoAutoSave] = useState(0);
   const [erro, setErro] = useState("");
   const salvandoRef = useRef(false);
   const novoPedidoId = useRef(uid());
@@ -105,6 +108,7 @@ export default function PedidoVenda({ db, update, empresa, ordemEmEdicao, onFina
     };
     for (const campo of ["dataProgramada", "horaInicio", "horaFim", "veiculoId", "tipoVeiculo", "veiculo", "marca", "cor", "ano", "placa", "frota", "motorista", "funcionarioId", "funcionarioNome"]) delete ordem[campo];
     salvandoRef.current = true;
+    setSalvamentoAutomatico(silencioso);
     setSalvando(true);
     try {
       const quantidades = itensSalvos.filter((item) => item.tipo === "produto").reduce((soma, item) => ({ ...soma, [item.itemId]: (soma[item.itemId] || 0) + item.qtd }), {});
@@ -119,7 +123,8 @@ export default function PedidoVenda({ db, update, empresa, ordemEmEdicao, onFina
         setClienteId(""); setItens([]); setPagamentos([]); setDesconto(""); setObservacao("");
         onFinalizarEdicao?.(concluir);
       } else {
-        ultimoAutoSaveRef.current = JSON.stringify({ clienteId: cliente.id, itens: itensSalvos, desconto, observacao });
+        ultimoAutoSaveRef.current = estadoAutoSave(clienteId, itens, desconto, observacao, pagamentos);
+        setRevisaoAutoSave((revisao) => revisao + 1);
       }
     } catch (error) {
       setErro(`Não foi possível salvar o pedido: ${error.message}`);
@@ -132,13 +137,13 @@ export default function PedidoVenda({ db, update, empresa, ordemEmEdicao, onFina
   useEffect(() => {
     const itensValidos = filtrarItensValidos(itens);
     if (somenteLeitura || !clienteId || !itensValidos.length || salvandoRef.current) return;
-    const payload = JSON.stringify({ clienteId, itens: itensValidos.map((item) => ({ ...item, descricao: item.descricao?.trim?.() || item.descricao || "" })), desconto, observacao });
+    const payload = estadoAutoSave(clienteId, itens, desconto, observacao, pagamentos);
     if (ultimoAutoSaveRef.current === payload) return;
     const timer = setTimeout(() => {
       salvar(false, { silencioso: true });
     }, 350);
     return () => clearTimeout(timer);
-  }, [clienteId, itens, desconto, observacao, somenteLeitura]);
+  }, [clienteId, itens, desconto, observacao, pagamentos, somenteLeitura, revisaoAutoSave]);
 
   const abrirPedidoSelecionado = (pedido) => {
     setPesquisaPedidoAberta(false);
@@ -268,7 +273,7 @@ export default function PedidoVenda({ db, update, empresa, ordemEmEdicao, onFina
       </div>
     <ClienteDocumento db={db} clienteId={clienteId} setClienteId={setClienteId} acao={<button type="button" onClick={() => setPesquisaPedidoAberta(true)} className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"><Search size={15} /> Pesquisar pedido</button>} />
 
-    <fieldset disabled={salvando || somenteLeitura} className="min-w-0 space-y-5">
+    <fieldset disabled={(salvando && !salvamentoAutomatico) || somenteLeitura} className="min-w-0 space-y-5">
       <ItensDocumento db={db} itens={itens} setItens={setItens} desconto={desconto} setDesconto={setDesconto} podeEditarValor={podeEditarValor} />
 
       <ObservacoesDocumento observacao={observacao} setObservacao={setObservacao} />
