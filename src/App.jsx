@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createCliente, loadDatabase, syncDatabase } from "./lib/database";
 import PedidoVenda from "./componentes/PedidoVenda";
 import ImpressaoVenda from "./componentes/ImpressaoVenda";
-import { calcularItem, filtrarItensValidos, sincronizarParcelas, somarItens } from "./lib/pedido";
+import { calcularItem, filtrarItensValidos, normalizarBuscaTexto, sincronizarParcelas, somarItens } from "./lib/pedido";
 import { ClienteDocumento, ItensDocumento, ObservacoesDocumento } from "./componentes/DocumentoVenda";
 
 import {
@@ -1698,6 +1698,8 @@ function OrcamentosWorkspace({ db, update, empresa, onAbrirPedido }) {
   const novoOrcamentoId = useRef(uid());
   const [orcamentoAtual, setOrcamentoAtual] = useState(null);
   const [orcamentoParaImpressao, setOrcamentoParaImpressao] = useState(null);
+  const [pesquisaOrcamentoAberta, setPesquisaOrcamentoAberta] = useState(false);
+  const [buscaOrcamento, setBuscaOrcamento] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [mensagem, setMensagem] = useState("");
 
@@ -1706,6 +1708,12 @@ function OrcamentosWorkspace({ db, update, empresa, onAbrirPedido }) {
   const orcamentos = [...(db.orcamentos || [])].sort((a, b) => String(b.data || "").localeCompare(String(a.data || "")));
   const registroAtual = (db.orcamentos || []).find((item) => String(item.id) === String(orcamentoAtual?.id)) || orcamentoAtual;
   const convertido = Boolean(registroAtual?.pedidoId);
+  const termoOrcamento = normalizarBuscaTexto(buscaOrcamento);
+  const orcamentosEncontrados = orcamentos.filter((orcamento) => {
+    const cliente = (db.clientes || []).find((item) => String(item.id) === String(orcamento.clienteId));
+    return !termoOrcamento || [orcamento.numero, orcamento.clienteNome, cliente?.nome, orcamento.data, fmtDate(orcamento.data), cliente?.cpfCnpj, orcamento.clienteSnapshot?.cpfCnpj]
+      .some((valor) => normalizarBuscaTexto(valor).includes(termoOrcamento));
+  });
 
   const resetarFormulario = () => {
     setClienteId("");
@@ -1717,6 +1725,8 @@ function OrcamentosWorkspace({ db, update, empresa, onAbrirPedido }) {
   };
 
   const carregarOrcamento = (orcamento) => {
+    setPesquisaOrcamentoAberta(false);
+    setBuscaOrcamento("");
     setClienteId(orcamento.clienteId || "");
     setItens((orcamento.itens || []).map((item) => ({
       ...item,
@@ -1861,14 +1871,29 @@ function OrcamentosWorkspace({ db, update, empresa, onAbrirPedido }) {
   return (
     <div className="space-y-6">
       {orcamentoParaImpressao && <OrcamentoPrintModal orcamento={orcamentoParaImpressao} empresa={empresa} cliente={clienteImpressao} onClose={() => setOrcamentoParaImpressao(null)} />}
+      {pesquisaOrcamentoAberta && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4" role="dialog" aria-modal="true" aria-labelledby="pesquisa-orcamento-titulo">
+        <div className="w-full max-w-2xl rounded-2xl bg-white p-5 shadow-2xl">
+          <div className="mb-4 flex items-center justify-between"><h2 id="pesquisa-orcamento-titulo" className="text-lg font-semibold text-slate-900">Pesquisar orçamento</h2><button type="button" onClick={() => setPesquisaOrcamentoAberta(false)} className="p-2 text-slate-400 hover:text-slate-700" aria-label="Fechar pesquisa de orçamento"><X size={18} /></button></div>
+          <input autoFocus className={inputCls} aria-label="Pesquisar orçamento por número, cliente, data ou CPF/CNPJ" placeholder="Número, cliente, data ou CPF/CNPJ" value={buscaOrcamento} onChange={(event) => setBuscaOrcamento(event.target.value)} onKeyDown={(event) => { if (event.key === "Escape") setPesquisaOrcamentoAberta(false); }} />
+          <div className="mt-4 max-h-72 space-y-2 overflow-y-auto">
+            {orcamentosEncontrados.map((orcamento) => <button key={orcamento.id} type="button" onClick={() => carregarOrcamento(orcamento)} className="flex w-full items-center justify-between gap-4 rounded-xl border border-slate-200 px-3 py-3 text-left hover:bg-red-50">
+              <div className="min-w-0 flex-1"><div className="font-semibold text-slate-800">#{orcamento.numero || "-"} · {orcamento.clienteNome || "Cliente"}</div><div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500"><span className="rounded-full bg-slate-100 px-2 py-1 font-medium text-slate-600">{orcamento.pedidoId ? "Convertido" : orcamento.status === "pendente" ? "Pendente" : "Aberto"}</span><span>{fmtDate(orcamento.data)}</span><span className="font-semibold text-slate-700">{brl(orcamento.total)}</span></div></div><span className="text-sm font-semibold text-red-700">Abrir</span>
+            </button>)}
+            {!orcamentosEncontrados.length && <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-400">Nenhum orçamento encontrado.</div>}
+          </div>
+        </div>
+      </div>}
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="headline text-2xl font-bold text-slate-900">Orçamentos</h1>
           <p className="mt-1 text-sm text-slate-500">Selecione o cliente, inclua os itens e converta em pedido quando aprovado.</p>
         </div>
+        <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={() => { setBuscaOrcamento(""); setPesquisaOrcamentoAberta(true); }} disabled={salvando} className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-40"><Search size={15} /> Pesquisar orçamento</button>
         <button type="button" onClick={resetarFormulario} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
           <FilePlus2 size={16} /> Novo orçamento
         </button>
+        </div>
       </header>
 
       <div className="space-y-5">
