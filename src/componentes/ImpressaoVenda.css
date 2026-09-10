@@ -1,0 +1,49 @@
+.venda-print-modal { position: fixed; inset: 0; z-index: 100; overflow: auto; background: #0f172a99; padding: 24px; }
+.venda-print-container { width: 210mm; max-width: 100%; margin: 0 auto; }
+.venda-print-actions { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 12px; }
+.venda-print-actions button { display: flex; align-items: center; gap: 8px; background: white; padding: 10px 16px; border-radius: 8px; cursor: pointer; }
+.venda-print-actions button:last-child { background: #9a3412; color: white; }
+.venda-documento { background: white; color: #111; padding: 10mm; min-height: 297mm; font: 12px Arial, sans-serif; box-shadow: 0 12px 36px #0003; overflow-wrap: anywhere; }
+.venda-cabecalho { display: grid; grid-template-columns: 50% 30% 20%; border: 1px solid #333; }
+.venda-cabecalho > div { padding: 12px; }
+.venda-cabecalho > div + div { border-left: 1px solid #333; }
+.venda-empresa { line-height: 1.5; }
+.venda-empresa h1 { font-size: 14px; font-weight: bold; }
+.venda-empresa > strong { font-size: 18px; }
+.venda-titulo { display: flex; flex-direction: column; justify-content: center; text-align: center; gap: 16px; }
+.venda-titulo h2 { font-size: 21px; font-weight: bold; }
+.venda-numero { display: flex; flex-direction: column; justify-content: space-between; text-align: center; gap: 20px; font-size: 14px; }
+.venda-cliente { display: grid; grid-template-columns: 1fr 1fr 1fr; border-left: 1px solid #333; }
+.venda-cliente > div { display: flex; border-right: 1px solid #333; border-bottom: 1px solid #333; }
+.venda-cliente-nome { grid-column: span 2; }
+.venda-cliente b { font-weight: normal; padding: 6px; border-right: 1px solid #333; white-space: nowrap; }
+.venda-cliente span { padding: 6px; }
+.venda-documento table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.venda-itens { margin-top: 16px; }
+.venda-documento th, .venda-documento td { border: 1px solid #333; padding: 7px 6px; }
+.venda-documento th { font-weight: bold; background: #f3f3f3; }
+.venda-documento .numero { text-align: right; white-space: nowrap; }
+.venda-resumo { display: grid; grid-template-columns: 1fr 34%; border: 1px solid #333; border-top: 0; }
+.venda-observacao { padding: 8px; }
+.venda-observacao p { white-space: pre-wrap; margin-top: 6px; line-height: 1.5; }
+.venda-resumo dl { border-left: 1px solid #333; }
+.venda-resumo dl > div { display: grid; grid-template-columns: 1fr 1fr; }
+.venda-resumo dl > div + div { border-top: 1px solid #333; }
+.venda-resumo dt, .venda-resumo dd { padding: 7px 6px; text-align: right; }
+.venda-resumo dd { border-left: 1px solid #333; white-space: nowrap; }
+.venda-total { font-weight: bold; background: #f3f3f3; }
+.venda-pagamento { margin-top: 16px; }
+.venda-pagamento-titulo { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; }
+.venda-pagamento th { text-align: left; }
+@media screen and (max-width: 640px) { .venda-print-modal { padding: 12px; } .venda-print-container { max-width: none; } .venda-print-actions { justify-content: flex-start; position: sticky; left: 0; } }
+@media print {
+  @page { size: A4 portrait; margin: 10mm; }
+  body > :not(.venda-print-modal) { display: none !important; }
+  .venda-print-modal { position: static; padding: 0; background: white; overflow: visible; }
+  .venda-print-container { width: 100%; max-width: none; margin: 0; }
+  .venda-print-actions { display: none !important; }
+  .venda-documento { padding: 0; min-height: 0; box-shadow: none; }
+  .venda-documento thead { display: table-header-group; }
+  .venda-documento tr, .venda-cabecalho, .venda-cliente, .venda-resumo, .venda-pagamento-titulo { break-inside: avoid; }
+  .venda-pagamento-titulo { break-after: avoid; }
+}

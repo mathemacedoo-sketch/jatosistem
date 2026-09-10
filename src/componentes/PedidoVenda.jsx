@@ -1,6 +1,6 @@
 import { ClienteDocumento, ItensDocumento, ObservacoesDocumento } from "./DocumentoVenda";
 import { useEffect, useRef, useState } from "react";
-import { ExternalLink, Plus, RotateCcw, Search, Trash2, X } from "lucide-react";
+import { ExternalLink, Plus, Printer, RotateCcw, Search, Trash2, X } from "lucide-react";
 import { calcularItem, carregarPagamentos, dinheiro, filtrarItensValidos, financeiroPedido, gerarParcelasPagamento, normalizarBuscaTexto, somarItens, validarPagamentos, vencimentoMensal } from "../lib/pedido";
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -43,6 +43,21 @@ export default function PedidoVenda({ db, update, empresa, ordemEmEdicao, onFina
   const totalPagamentos = dinheiro(pagamentos.reduce((soma, pagamento) => soma + Number(pagamento.valor || 0), 0));
   const saldo = dinheiro(resumo.total - totalPagamentos);
   const somenteLeitura = !pendente(ordemEmEdicao);
+  const imprimirPedido = () => {
+    const itensValidos = filtrarItensValidos(itens).map(calcularItem);
+    if (!clienteId || !itensValidos.length) return;
+    const registro = ordemEmEdicao || (db.ordens || []).find((item) => item.id === novoPedidoId.current);
+    const pessoa = somenteLeitura ? { ...cliente, ...registro?.clienteSnapshot } : cliente || registro?.clienteSnapshot || {};
+    const ordem = somenteLeitura ? registro : {
+      ...registro,
+      numero: registro?.numero || "Rascunho",
+      data: registro?.data || hojeISO(),
+      clienteId, clienteNome: pessoa.nome, clienteSnapshot: pessoa,
+      itens: itensValidos, ...resumo, observacao: observacao.trim(),
+      ...financeiroPedido(pagamentos, false, hojeISO()),
+    };
+    setRecibo({ ordem, cliente: pessoa, previa: true });
+  };
   const pedidosPesquisaveis = (db.ordens || [])
     .filter((ordem) => !ordem.lancamentoManual)
     .sort((a, b) => String(b.data || "").localeCompare(String(a.data || "")));
@@ -210,7 +225,7 @@ export default function PedidoVenda({ db, update, empresa, ordemEmEdicao, onFina
   };
 
   return <div className="space-y-5">
-    {recibo && <ReciboModal ordem={recibo.ordem} empresa={empresa} cliente={recibo.cliente} onClose={() => { setRecibo(null); onConcluirFechado?.(); }} />}
+    {recibo && <ReciboModal ordem={recibo.ordem} empresa={empresa} cliente={recibo.cliente} onClose={() => { setRecibo(null); if (!recibo.previa) onConcluirFechado?.(); }} />}
     {pesquisaPedidoAberta && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-2xl rounded-2xl bg-white p-5 shadow-2xl"><div className="mb-4 flex items-center justify-between"><h2 className="text-lg font-semibold text-slate-900">Pesquisar pedido</h2><button type="button" onClick={() => setPesquisaPedidoAberta(false)} className="p-2 text-slate-400 hover:text-slate-700" aria-label="Fechar pesquisa"><X size={18} /></button></div><input autoFocus className={inputCls} placeholder="Número, cliente ou data" value={buscaPedido} onChange={(event) => setBuscaPedido(event.target.value)} /><div className="mt-4 max-h-72 space-y-2 overflow-y-auto">
       {pedidosPesquisaveis.filter(filtrarPedidosPorBusca).map((ordem) => {
         const statusPedido = ordem.statusOS || "pendente";
@@ -238,20 +253,19 @@ export default function PedidoVenda({ db, update, empresa, ordemEmEdicao, onFina
       {!pedidosPesquisaveis.filter(filtrarPedidosPorBusca).length && <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-400">Nenhum pedido encontrado.</div>}
     </div></div></div>}
     {somenteLeitura && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">Pedido concluído. Para alterá-lo, estorne o pedido na lista de pedidos.</div>}
-    {ordemEmEdicao && (
       <div className="flex flex-wrap justify-end gap-3">
-        {!['rascunho', 'pendente', 'estornado'].includes(ordemEmEdicao.statusOS || 'pendente') && (
+        <button type="button" onClick={imprimirPedido} disabled={salvando || !clienteId || !filtrarItensValidos(itens).length} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"><Printer size={16} /> Imprimir</button>
+        {ordemEmEdicao && !['rascunho', 'pendente', 'estornado'].includes(ordemEmEdicao.statusOS || 'pendente') && (
           <button type="button" onClick={estornarPedido} className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-700 hover:bg-amber-100">
             <RotateCcw size={16} /> Estornar pedido
           </button>
         )}
-        {['rascunho', 'pendente', 'estornado'].includes(ordemEmEdicao.statusOS || 'pendente') && (
+        {ordemEmEdicao && ['rascunho', 'pendente', 'estornado'].includes(ordemEmEdicao.statusOS || 'pendente') && (
           <button type="button" onClick={excluirPedido} className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-100">
             <Trash2 size={16} /> Excluir pedido
           </button>
         )}
       </div>
-    )}
     <ClienteDocumento db={db} clienteId={clienteId} setClienteId={setClienteId} acao={<button type="button" onClick={() => setPesquisaPedidoAberta(true)} className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"><Search size={15} /> Pesquisar pedido</button>} />
 
     <fieldset disabled={salvando || somenteLeitura} className="min-w-0 space-y-5">

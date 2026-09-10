@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createCliente, loadDatabase, syncDatabase } from "./lib/database";
 import PedidoVenda from "./componentes/PedidoVenda";
+import ImpressaoVenda from "./componentes/ImpressaoVenda";
 import { calcularItem, filtrarItensValidos, sincronizarParcelas, somarItens } from "./lib/pedido";
 import { ClienteDocumento, ItensDocumento, ObservacoesDocumento } from "./componentes/DocumentoVenda";
 
@@ -1597,144 +1598,11 @@ function StatusBadge({ status }) {
 }
 
 function OrcamentoPrintModal({ orcamento, empresa = {}, cliente = {}, onClose }) {
-  if (!orcamento) return null;
-  const clienteCompleto = { ...(orcamento.clienteSnapshot || {}), ...(cliente || {}) };
-  const enderecoEmpresa = enderecoCompleto(empresa);
-  const enderecoCliente = enderecoCompleto(clienteCompleto);
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/60 p-4 sm:p-8">
-      <style>{`
-        @media print {
-          body * { visibility: hidden !important; }
-          .orcamento-print-area, .orcamento-print-area * { visibility: visible !important; }
-          .orcamento-print-area { position: absolute !important; inset: 0 !important; width: 210mm !important; min-height: 297mm !important; max-width: none !important; padding: 15mm !important; box-sizing: border-box !important; box-shadow: none !important; border: 0 !important; }
-          .orcamento-print-area tr, .orcamento-print-area section { break-inside: avoid; page-break-inside: avoid; }
-          .orcamento-print-actions { display: none !important; }
-          @page { size: A4 portrait; margin: 0; }
-        }
-      `}</style>
-      <div className="my-auto w-full max-w-[210mm]">
-        <div className="orcamento-print-actions mb-3 flex justify-end gap-2">
-          <button onClick={onClose} className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow">Fechar</button>
-          <button onClick={() => window.print()} className="flex items-center gap-2 rounded-xl bg-orange-700 px-4 py-2.5 text-sm font-semibold text-white shadow">
-            <Printer size={17} /> Imprimir / Salvar PDF
-          </button>
-        </div>
-        <article className="orcamento-print-area mx-auto min-h-[297mm] w-[210mm] max-w-full bg-white p-6 text-sm text-slate-800 shadow-2xl sm:p-[15mm]">
-          <header className="flex justify-between gap-6 border-b-2 border-slate-800 pb-5">
-            <div>
-              <h1 className="text-2xl font-bold">{empresa.nome || "Empresa"}</h1>
-              {empresa.razaoSocial && <div>{empresa.razaoSocial}</div>}
-              {empresa.cnpj && <div>CNPJ: {empresa.cnpj}</div>}
-              {enderecoEmpresa && <div className="text-slate-500">{enderecoEmpresa}</div>}
-              {(empresa.telefone || empresa.email) && <div className="text-slate-500">{[empresa.telefone, empresa.email].filter(Boolean).join(" · ")}</div>}
-            </div>
-            <div className="text-right">
-              <h2 className="text-xl font-bold">ORÇAMENTO</h2>
-              <div>Nº {orcamento.numero || "Rascunho"}</div>
-              <div className="text-slate-500">{fmtDate(orcamento.data || todayISO())}</div>
-            </div>
-          </header>
-
-          <section className="mt-5">
-            <h3 className="mb-2 text-xs font-bold uppercase text-slate-500">Cliente</h3>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <div><strong>Nome:</strong> {orcamento.clienteNome || clienteCompleto.nome || "-"}</div>
-              <div><strong>{rotuloDocumentoCliente(clienteCompleto)}:</strong> {clienteCompleto.cpfCnpj || "-"}</div>
-              <div className="sm:col-span-2"><strong>Endereço:</strong> {enderecoCliente || "-"}</div>
-            </div>
-          </section>
-
-          <section className="mt-5">
-            <h3 className="mb-2 text-xs font-bold uppercase text-slate-500">Itens do orçamento</h3>
-            <table className="w-full border-collapse">
-              <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-2 text-left">Descrição</th><th className="p-2 text-center">Qtd.</th><th className="p-2 text-right">Valor unitário</th><th className="p-2 text-right">Total</th></tr></thead>
-              <tbody>{(orcamento.itens || []).map((item, index) => <tr key={item.uidLine || item.id || index} className="border-b border-slate-200"><td className="p-2">{item.descricao || item.nome}</td><td className="p-2 text-center">{item.qtd}</td><td className="p-2 text-right">{brl(item.precoUnit)}</td><td className="p-2 text-right">{brl(item.subtotal ?? Number(item.precoUnit || 0) * Number(item.qtd || 1))}</td></tr>)}</tbody>
-            </table>
-            <div className="mt-4 text-right text-xl font-bold">Total: {brl(orcamento.total)}</div>
-          </section>
-        </article>
-      </div>
-    </div>
-  );
+  return <ImpressaoVenda documento={orcamento} tipo="orcamento" empresa={empresa} cliente={cliente} onClose={onClose} />;
 }
 
 function ReciboOSModal({ ordem, empresa = {}, cliente = {}, onClose }) {
-  if (!ordem) return null;
-  cliente = { ...cliente, ...ordem.clienteSnapshot };
-  const enderecoEmpresa = [empresa.endereco, empresa.numero, empresa.bairro, empresa.cidade, empresa.estado].filter(Boolean).join(", ");
-  const enderecoCliente = [cliente.endereco, cliente.numero, cliente.bairro, cliente.cidade, cliente.estado].filter(Boolean).join(", ");
-  const parcelasRecibo = ordem.parcelas?.length ? ordem.parcelas : (ordem.pagamentos || []).flatMap((pagamento) => pagamento.parcelas.map((parcela) => ({ ...parcela, formaPagamento: pagamento.formaPagamento, tipoPagamento: pagamento.tipoPagamento })));
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/60 p-4 sm:p-8">
-      <style>{`
-        @media print {
-          body * { visibility: hidden !important; }
-          .os-print-area, .os-print-area * { visibility: visible !important; }
-          .os-print-area { position: absolute !important; inset: 0 !important; width: 210mm !important; min-height: 297mm !important; max-width: none !important; padding: 15mm !important; box-sizing: border-box !important; box-shadow: none !important; border: 0 !important; }
-          .os-print-area tr, .os-print-area section { break-inside: avoid; page-break-inside: avoid; }
-          .os-print-actions { display: none !important; }
-          @page { size: A4 portrait; margin: 0; }
-        }
-      `}</style>
-      <div className="my-auto w-full max-w-[210mm]">
-        <div className="os-print-actions mb-3 flex justify-end gap-2">
-          <button onClick={onClose} className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow">Fechar</button>
-          <button onClick={() => window.print()} className="flex items-center gap-2 rounded-xl bg-orange-700 px-4 py-2.5 text-sm font-semibold text-white shadow">
-            <Printer size={17} /> Imprimir / Salvar PDF
-          </button>
-        </div>
-        <article className="os-print-area mx-auto min-h-[297mm] w-[210mm] max-w-full bg-white p-6 text-sm text-slate-800 shadow-2xl sm:p-[15mm]">
-          <header className="flex justify-between gap-6 border-b-2 border-slate-800 pb-5">
-            <div>
-              <h1 className="text-2xl font-bold">{empresa.nome || "Empresa"}</h1>
-              {empresa.razaoSocial && <div>{empresa.razaoSocial}</div>}
-              {empresa.cnpj && <div>CNPJ: {empresa.cnpj}</div>}
-              {enderecoEmpresa && <div className="text-slate-500">{enderecoEmpresa}</div>}
-              {(empresa.telefone || empresa.email) && <div className="text-slate-500">{[empresa.telefone, empresa.email].filter(Boolean).join(" · ")}</div>}
-            </div>
-            <div className="text-right">
-              <h2 className="text-xl font-bold">PEDIDO DE VENDA</h2>
-              <div>Nº {ordem.numero}</div>
-              <div className="text-slate-500">{fmtDate(ordem.data)}</div>
-            </div>
-          </header>
-
-          <section className="mt-5">
-            <h3 className="mb-2 text-xs font-bold uppercase text-slate-500">Cliente</h3>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <div><strong>Nome:</strong> {ordem.clienteNome || cliente.nome || "-"}</div>
-              <div><strong>CPF/CNPJ:</strong> {cliente.cpfCnpj || "-"}</div>
-              <div><strong>Telefone:</strong> {cliente.telefone || "-"}</div>
-              <div><strong>E-mail:</strong> {cliente.email || "-"}</div>
-              {enderecoCliente && <div className="sm:col-span-2"><strong>Endereço:</strong> {enderecoCliente}</div>}
-            </div>
-          </section>
-
-          <section className="mt-5">
-            <h3 className="mb-2 text-xs font-bold uppercase text-slate-500">Itens do pedido</h3>
-            <table className="w-full border-collapse">
-              <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-2 text-left">Cód.</th><th className="p-2 text-left">Descrição</th><th className="p-2 text-center">Qtd.</th><th className="p-2 text-right">Unitário</th><th className="p-2 text-right">Desconto</th><th className="p-2 text-right">Total</th></tr></thead>
-              <tbody>{(ordem.itens || []).map((item, index) => <tr key={item.uidLine || index} className="border-b border-slate-200"><td className="p-2">{item.codigo || "-"}</td><td className="p-2">{item.descricao || item.nome}</td><td className="p-2 text-center">{item.qtd}</td><td className="p-2 text-right">{brl(item.precoUnit)}</td><td className="p-2 text-right">{brl(item.desconto)}</td><td className="p-2 text-right">{brl(item.subtotal ?? Number(item.precoUnit || 0) * Number(item.qtd || 1) - Number(item.desconto || 0))}</td></tr>)}</tbody>
-            </table>
-            {Number(ordem.desconto || 0) > 0 && <div className="mt-4 text-right text-sm text-slate-500">Subtotal: {brl(ordem.subtotal || Number(ordem.total) + Number(ordem.desconto))}<br />Desconto: - {brl(ordem.desconto)}</div>}
-            <div className="mt-4 text-right text-xl font-bold">Total: {brl(ordem.total)}</div>
-          </section>
-
-          {ordem.observacao && <section className="mt-5"><h3 className="mb-2 text-xs font-bold uppercase text-slate-500">Observações</h3><p className="whitespace-pre-wrap">{ordem.observacao}</p></section>}
-          <section className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <div><strong>Pagamento:</strong> {ordem.formaPagamento || "-"}</div>
-            <div><strong>Status financeiro:</strong> {ordem.statusPagamento || "-"}</div>
-            <div><strong>Valor pago:</strong> {brl(ordem.valorPago || 0)}</div>
-          </section>
-          {parcelasRecibo.length > 0 && <table className="mt-4 w-full text-xs"><thead className="bg-slate-50 text-left text-slate-500"><tr><th className="p-2">Modalidade</th><th className="p-2">Condição</th><th className="p-2">Forma</th><th className="p-2">Vencimento</th><th className="p-2 text-right">Valor</th></tr></thead><tbody>{parcelasRecibo.map((parcela) => <tr key={parcela.id}><td className="p-2">{parcela.tipoPagamento === "avista" ? "À vista" : "A prazo"}</td><td className="p-2">{parcela.numeroParcela}/{parcela.totalParcelas}</td><td className="p-2">{parcela.formaPagamento || ordem.formaPagamento}</td><td className="p-2">{fmtDate(parcela.dataVencimento)}</td><td className="p-2 text-right">{brl(parcela.valor)}</td></tr>)}</tbody></table>}
-          <div className="mt-16 grid grid-cols-2 gap-12 text-center"><div className="border-t border-slate-700 pt-2">Assinatura da empresa</div><div className="border-t border-slate-700 pt-2">Assinatura do cliente</div></div>
-        </article>
-      </div>
-    </div>
-  );
+  return <ImpressaoVenda documento={ordem} tipo="pedido" empresa={empresa} cliente={cliente} onClose={onClose} />;
 }
 
 function ReciboFinanceiroModal({ tipo, conta, empresa = {}, onClose }) {
