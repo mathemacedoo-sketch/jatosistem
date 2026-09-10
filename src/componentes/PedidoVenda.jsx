@@ -257,7 +257,6 @@ export default function PedidoVenda({ db, update, empresa, ordemEmEdicao, onFina
       })}
       {!pedidosPesquisaveis.filter(filtrarPedidosPorBusca).length && <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-400">Nenhum pedido encontrado.</div>}
     </div></div></div>}
-    {somenteLeitura && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">Pedido concluído. Para alterá-lo, estorne o pedido na lista de pedidos.</div>}
       <div className="flex flex-wrap justify-end gap-3">
         <button type="button" onClick={imprimirPedido} disabled={salvando || !clienteId || !filtrarItensValidos(itens).length} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"><Printer size={16} /> Imprimir</button>
         {ordemEmEdicao && !['rascunho', 'pendente', 'estornado'].includes(ordemEmEdicao.statusOS || 'pendente') && (
