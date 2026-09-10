@@ -917,27 +917,27 @@ function LoginScreen({ auth, setAuth, entrar, db }) {
             <span>Segmentos</span>
             <span>Contato</span>
           </nav>
-          <button className="rounded-xl bg-[#d92f2f] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#b91d1d]">Acessar conta</button>
+          <button className="rounded-xl bg-[#d96a5a] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#c75a4a]">Acessar conta</button>
         </div>
       </header>
 
       <main className="mx-auto max-w-7xl px-6 py-8 md:py-12">
-        <section className="overflow-hidden rounded-[30px] bg-[linear-gradient(135deg,#d64a37_0%,#b51f1f_48%,#7f1414_100%)] shadow-[0_30px_80px_-40px_rgba(113,23,23,0.9)]">
+        <section className="overflow-hidden rounded-[30px] bg-[linear-gradient(135deg,#d77a63_0%,#c1544a_48%,#8e3e3a_100%)] shadow-[0_30px_80px_-40px_rgba(95,38,34,0.9)]">
           <div className="grid items-center gap-8 px-6 py-8 md:grid-cols-[1.2fr_0.8fr] md:px-12 md:py-12">
             <div className="space-y-6 text-white">
-              <div className="inline-flex items-center rounded-full border border-white/30 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-red-50">
+              <div className="inline-flex items-center rounded-full border border-white/30 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-rose-50">
                 Gestão inteligente
               </div>
               <h1 className="headline max-w-xl text-4xl font-bold leading-tight md:text-5xl">
                 Sua empresa mais organizada, eficiente e pronta para crescer.
               </h1>
-              <p className="max-w-xl text-base text-red-50/90 md:text-lg">
+              <p className="max-w-xl text-base text-rose-50/90 md:text-lg">
                 O MM ERP centraliza clientes, vendas, finanças, estoque e operação em um único sistema pensado para acelerar a rotina do seu negócio.
               </p>
 
               <div className="grid gap-3 sm:grid-cols-2">
                 {beneficios.map((item) => (
-                  <div key={item} className="flex items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-3 py-2 text-sm font-medium text-red-50 backdrop-blur-sm">
+                  <div key={item} className="flex items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-3 py-2 text-sm font-medium text-rose-50 backdrop-blur-sm">
                     <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/15 text-xs font-bold">✓</span>
                     {item}
                   </div>
@@ -966,7 +966,7 @@ function LoginScreen({ auth, setAuth, entrar, db }) {
               {modo === "login" ? (
                 <div className="space-y-4">
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-red-700">MM Tecnologia</p>
+                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#b85c4a]">MM Tecnologia</p>
                     <h2 className="headline mt-1 text-2xl font-bold text-slate-900">Acessar o sistema</h2>
                   </div>
 
@@ -988,14 +988,14 @@ function LoginScreen({ auth, setAuth, entrar, db }) {
                   {erro && <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{erro}</div>}
                   {sucesso && <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{sucesso}</div>}
 
-                  <button onClick={entrarComCredenciais} className="w-full rounded-xl bg-[#d93a3a] py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#b91d1d]">
+                  <button onClick={entrarComCredenciais} className="w-full rounded-xl bg-[#d76b5d] py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#c8574c]">
                     Entrar no MM ERP
                   </button>
                 </div>
               ) : (
                 <div className="space-y-4">
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-red-700">Solicite seu acesso</p>
+                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#b85c4a]">Solicite seu acesso</p>
                     <h2 className="headline mt-1 text-2xl font-bold text-slate-900">Cadastrar empresa</h2>
                   </div>
 
@@ -1029,7 +1029,7 @@ function LoginScreen({ auth, setAuth, entrar, db }) {
                   {erro && <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{erro}</div>}
                   {sucesso && <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{sucesso}</div>}
 
-                  <button onClick={solicitarAcesso} className="w-full rounded-xl bg-[#b91d1d] py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#8f1414]">
+                  <button onClick={solicitarAcesso} className="w-full rounded-xl bg-[#c55d50] py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#af4b40]">
                     Solicitar acesso
                   </button>
                 </div>
