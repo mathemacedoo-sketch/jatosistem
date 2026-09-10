@@ -2083,12 +2083,10 @@ function Ordens({ db, update, empresa, onEditarNaOS, embedded = false }) {
 }
 
 // ---------- Clientes ----------
-function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
+function Clientes({ db, update, empresaId }) {
   const clienteFormInicial = {
     tipoPessoa: "fisica", nome: "", cpfCnpj: "", dataNascimento: "", email: "", telefone: "",
     cep: "", endereco: "", numero: "", bairro: "", cidade: "", estado: "",
-    tipoVeiculo: "", marca: "", veiculo: "", cor: "", ano: "", placa: "", frota: "", motorista: "",
-    veiculos: [],
   };
   const [form, setForm] = useState(clienteFormInicial);
   const [busca, setBusca] = useState("");
@@ -2112,13 +2110,7 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
     }
     try {
       if (!empresaId) throw new Error("Não foi possível identificar a empresa deste cliente.");
-      const temVeiculoPendente = [form.tipoVeiculo, form.marca, form.veiculo, form.cor, form.ano, form.placa, form.frota, form.motorista].some(Boolean);
-      const veiculos = temVeiculoPendente
-        ? [...form.veiculos, { id: uid(), tipoVeiculo: form.tipoVeiculo, marca: form.marca, veiculo: form.veiculo, cor: form.cor, ano: form.ano, placa: form.placa, frota: form.frota, motorista: form.motorista }]
-        : form.veiculos;
-      const primeiroVeiculo = veiculos[0] || {};
-      const { id: _veiculoId, ...dadosPrimeiroVeiculo } = primeiroVeiculo;
-      const dadosCliente = { ...form, ...dadosPrimeiroVeiculo, veiculos };
+      const dadosCliente = { ...form };
       if (editandoId) {
         await update("clientes", (prev) => prev.map((cliente) => cliente.id === editandoId ? { ...cliente, ...dadosCliente } : cliente));
         setEditandoId(null);
@@ -2140,8 +2132,6 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
     const dadosFormulario = Object.fromEntries(
       Object.keys(clienteFormInicial).map((campo) => [campo, cliente[campo] ?? clienteFormInicial[campo]])
     );
-    dadosFormulario.veiculos = veiculosDoCliente(cliente);
-    ["tipoVeiculo", "marca", "veiculo", "cor", "ano", "placa", "frota", "motorista"].forEach((campo) => { dadosFormulario[campo] = ""; });
     setEditandoId(cliente.id);
     setForm(dadosFormulario);
     formularioRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -2149,12 +2139,6 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
   const cancelarEdicao = () => {
     setEditandoId(null);
     setForm(clienteFormInicial);
-  };
-  const mostraCamposVeiculo = (empresaSegmento || "lava-jato").toLowerCase() === "lava-jato";
-  const adicionarVeiculo = () => {
-    if (![form.tipoVeiculo, form.marca, form.veiculo, form.cor, form.ano, form.placa, form.frota, form.motorista].some(Boolean)) return;
-    const novo = { id: uid(), tipoVeiculo: form.tipoVeiculo, marca: form.marca, veiculo: form.veiculo, cor: form.cor, ano: form.ano, placa: form.placa, frota: form.frota, motorista: form.motorista };
-    setForm((anterior) => ({ ...anterior, veiculos: [...anterior.veiculos, novo], tipoVeiculo: "", marca: "", veiculo: "", cor: "", ano: "", placa: "", frota: "", motorista: "" }));
   };
   const remove = (id) => {
     if (!confirmarExclusao("este cliente")) return;
@@ -2165,7 +2149,7 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
     const termo = busca.toLowerCase();
     return c.nome.toLowerCase().includes(termo)
       || (c.cpfCnpj || "").toLowerCase().includes(termo)
-      || veiculosDoCliente(c).some((veiculo) => (veiculo.placa || "").toLowerCase().includes(termo) || (veiculo.frota || "").toLowerCase().includes(termo) || (veiculo.motorista || "").toLowerCase().includes(termo));
+      || (c.telefone || "").toLowerCase().includes(termo);
   });
 
   return (
@@ -2178,7 +2162,7 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
       )}
       <header>
         <h1 className="headline text-2xl font-bold text-slate-900">Clientes</h1>
-        <p className="text-slate-500 text-sm mt-1">Cadastre clientes e seus veículos.</p>
+        <p className="text-slate-500 text-sm mt-1">Cadastre e gerencie seus clientes.</p>
       </header>
 
       <div ref={formularioRef}>
@@ -2201,46 +2185,6 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
           <Field label="Bairro"><input className={inputCls} value={form.bairro} onChange={(e) => setForm({ ...form, bairro: e.target.value })} /></Field>
           <Field label="Cidade"><input className={inputCls} value={form.cidade} onChange={(e) => setForm({ ...form, cidade: e.target.value })} /></Field>
           <Field label="UF"><input maxLength={2} className={inputCls} value={form.estado} onChange={(e) => setForm({ ...form, estado: e.target.value.toUpperCase() })} /></Field>
-          {mostraCamposVeiculo && (
-            <div className="col-span-full mt-2 rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <div className="mb-3">
-                <h2 className="text-sm font-semibold text-slate-800">Dados do veículo</h2>
-                <p className="text-xs text-slate-500">Identificação do carro e da pessoa responsável por levá-lo ao lava-jato.</p>
-              </div>
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-                <Field label="Tipo de veículo">
-                  <select className={inputCls} value={form.tipoVeiculo} onChange={(e) => setForm({ ...form, tipoVeiculo: e.target.value })}>
-                    <option value="">Selecionar tipo</option>
-                    <option value="carro">Carro</option>
-                    <option value="moto">Moto</option>
-                    <option value="caminhao">Caminhão</option>
-                    <option value="van">Van</option>
-                    <option value="utilitario">Utilitário</option>
-                    <option value="outro">Outro</option>
-                  </select>
-                </Field>
-                <Field label="Marca"><input className={inputCls} placeholder="Ex.: Toyota" value={form.marca} onChange={(e) => setForm({ ...form, marca: e.target.value })} /></Field>
-                <Field label="Modelo"><input className={inputCls} placeholder="Ex.: Corolla" value={form.veiculo} onChange={(e) => setForm({ ...form, veiculo: e.target.value })} /></Field>
-                <Field label="Cor"><input className={inputCls} placeholder="Ex.: Prata" value={form.cor} onChange={(e) => setForm({ ...form, cor: e.target.value })} /></Field>
-                <Field label="Ano"><input inputMode="numeric" maxLength={4} className={inputCls} placeholder="Ex.: 2024" value={form.ano} onChange={(e) => setForm({ ...form, ano: e.target.value.replace(/\D/g, "").slice(0, 4) })} /></Field>
-                <Field label="Placa"><input maxLength={8} className={inputCls} placeholder="Ex.: ABC1D23" value={form.placa} onChange={(e) => setForm({ ...form, placa: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 7) })} /></Field>
-                <Field label="Frota"><input className={inputCls} placeholder="Ex.: 001" value={form.frota} onChange={(e) => setForm({ ...form, frota: e.target.value })} /></Field>
-                <Field label="Motorista/Responsável"><input className={inputCls} placeholder="Quem costuma levar o veículo?" value={form.motorista} onChange={(e) => setForm({ ...form, motorista: e.target.value })} /></Field>
-              </div>
-              <button type="button" onClick={adicionarVeiculo} className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-50"><Plus size={15} /> Adicionar veículo à lista</button>
-              {form.veiculos.length > 0 && (
-                <div className="mt-4 space-y-2">
-                  <div className="text-xs font-semibold uppercase text-slate-500">Veículos cadastrados ({form.veiculos.length})</div>
-                  {form.veiculos.map((veiculo, index) => (
-                    <div key={veiculo.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
-                      <span><strong>{index + 1}.</strong> {[veiculo.marca, veiculo.veiculo, veiculo.placa, veiculo.frota ? `Frota ${veiculo.frota}` : ""].filter(Boolean).join(" · ") || "Veículo sem identificação"}{veiculo.motorista ? ` · ${veiculo.motorista}` : ""}</span>
-                      <button type="button" onClick={() => { if (confirmarExclusao("este veículo")) setForm((anterior) => ({ ...anterior, veiculos: anterior.veiculos.filter((item) => item.id !== veiculo.id) })); }} className="ml-3 text-slate-400 hover:text-red-500" title="Remover veículo"><Trash2 size={15} /></button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <button onClick={salvar} className="flex items-center gap-1.5 text-sm font-semibold text-emerald-800">{editandoId ? <Pencil size={16} /> : <Plus size={16} />} {editandoId ? "Salvar alterações" : "Adicionar cliente"}</button>
@@ -2251,14 +2195,14 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
 
       <div className="relative max-w-xs">
         <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-        <input className={inputCls + " pl-8"} placeholder="Buscar por nome, documento, placa..." value={busca} onChange={(e) => setBusca(e.target.value)} />
+        <input className={inputCls + " pl-8"} placeholder="Buscar por nome, documento, telefone..." value={busca} onChange={(e) => setBusca(e.target.value)} />
       </div>
 
       <Card className="p-0 overflow-hidden">
         {lista.length === 0 ? <EmptyState text="Nenhum cliente encontrado." /> : (
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
-              <tr><th className="text-left px-4 py-3">Nome</th><th className="text-left px-4 py-3">Telefone</th>{mostraCamposVeiculo && <><th className="text-left px-4 py-3">Veículo</th><th className="text-left px-4 py-3">Motorista</th></>}<th className="px-4 py-3"></th></tr>
+              <tr><th className="text-left px-4 py-3">Nome</th><th className="text-left px-4 py-3">Telefone</th><th className="px-4 py-3"></th></tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {lista.map((c) => (
@@ -2268,14 +2212,6 @@ function Clientes({ db, update, empresaId, empresaSegmento = "lava-jato" }) {
                     {c.cpfCnpj && <div className="mt-0.5 text-xs font-normal text-slate-400">{c.tipoPessoa === "juridica" ? "CNPJ" : "CPF"}: {c.cpfCnpj}</div>}
                   </td>
                   <td className="px-4 py-3 text-slate-500">{c.telefone || "-"}</td>
-                  {mostraCamposVeiculo && (
-                    <>
-                      <td className="px-4 py-3 text-slate-500">
-                        {veiculosDoCliente(c).length ? veiculosDoCliente(c).map((veiculo) => <div key={veiculo.id} className="mb-1 last:mb-0">{[veiculo.marca, veiculo.veiculo, veiculo.placa].filter(Boolean).join(" · ") || "Veículo sem identificação"}</div>) : "-"}
-                      </td>
-                      <td className="px-4 py-3 text-slate-500">{veiculosDoCliente(c).map((veiculo) => veiculo.motorista).filter(Boolean).join(", ") || "-"}</td>
-                    </>
-                  )}
                   <td className="px-4 py-3 text-right">
                     <div className="flex justify-end gap-3">
                       <button type="button" onClick={() => editar(c)} className="text-slate-400 hover:text-emerald-700" title="Editar cliente"><Pencil size={16} /></button>
