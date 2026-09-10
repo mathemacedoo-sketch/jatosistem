@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createCliente, loadDatabase, syncDatabase } from "./lib/database";
 import PedidoVenda from "./componentes/PedidoVenda";
+import Dashboard from "./componentes/Dashboard";
 import ImpressaoVenda from "./componentes/ImpressaoVenda";
 import { calcularItem, filtrarItensValidos, normalizarBuscaTexto, sincronizarParcelas, somarItens } from "./lib/pedido";
 import { ClienteDocumento, ItensDocumento, ObservacoesDocumento } from "./componentes/DocumentoVenda";
 
 import {
-  LayoutDashboard,
+  ChartColumn,
   FilePlus2,
   ClipboardList,
   Users,
@@ -318,6 +319,7 @@ export default function App() {
   const [servicoAberto, setServicoAberto] = useState(false);
   const [cadastrosAberto, setCadastrosAberto] = useState(false);
   const [financeiroAberto, setFinanceiroAberto] = useState(false);
+  const [relatoriosAberto, setRelatoriosAberto] = useState(false);
   const [ordemEmEdicao, setOrdemEmEdicao] = useState(null);
   const [auth, setAuth] = useState({ usuario: "", senha: "", empresaId: "", usuarioLogado: null });
   const lastSynced = useRef(SEED);
@@ -463,11 +465,13 @@ export default function App() {
       setServicoAberto(false);
       setCadastrosAberto(false);
       setFinanceiroAberto(false);
+      setRelatoriosAberto(false);
       return;
     }
     if (["ordens", "orcamentos"].includes(tab)) setServicoAberto(true);
     if (["empresas", "usuarios", "clientes", "funcionarios", "catalogo"].includes(tab)) setCadastrosAberto(true);
     if (["receber", "pagar"].includes(tab)) setFinanceiroAberto(true);
+    if (tab === "dashboard") setRelatoriosAberto(true);
   }, [tab]);
 
   useEffect(() => {
@@ -606,28 +610,8 @@ export default function App() {
     }));
   };
 
-  // ---- derived numbers ----
-  const stats = useMemo(() => {
-    const empresaData = getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "");
-    const mk = monthKey(todayISO());
-    const receitaMes = empresaData.ordens
-      .filter((o) => !["rascunho", "pendente", "estornado"].includes(o.statusOS))
-      .reduce((s, o) => s + valorRecebidoOrdem(o, (data) => monthKey(data) === mk), 0);
-    const receitaDia = empresaData.ordens
-      .filter((o) => !["rascunho", "pendente", "estornado"].includes(o.statusOS))
-      .reduce((s, o) => s + valorRecebidoOrdem(o, (data) => data === todayISO()), 0);
-    const aReceber = contasReceberFormatadas(empresaData.ordens)
-      .filter((o) => o.statusPagamento !== "pago")
-      .reduce((s, o) => s + Math.max(0, Number(o.valorParcela || 0) - Number(o.valorPago || 0)), 0);
-    const aPagar = empresaData.contasPagar
-      .reduce((s, c) => s + Math.max(0, Number(c.valor || 0) - Number(c.valorPago || 0)), 0);
-    const estoqueBaixo = empresaData.produtos.filter((p) => Number(p.quantidade) <= Number(p.estoqueMinimo));
-    return { receitaMes, receitaDia, aReceber, aPagar, estoqueBaixo };
-  }, [db, auth.empresaId, auth.usuarioLogado]);
-
   const NAV = [
     { id: "inicio", label: "Início", icon: Building2 },
-    { id: "dashboard", label: "Painel", icon: LayoutDashboard },
   ].filter((item) => podeAcessar(item.accessId || item.id));
 
   if (!loaded) {
@@ -816,6 +800,10 @@ export default function App() {
               )}
             </div>
           )}
+          {podeAcessar("dashboard") && <div>
+            <button type="button" onClick={() => setRelatoriosAberto((aberto) => !aberto)} aria-expanded={relatoriosAberto} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition border ${tab === "dashboard" ? "bg-orange-500/20 text-orange-200 border-orange-400/30" : "text-slate-300 hover:bg-white/5 hover:text-white border-transparent"}`}><ChartColumn size={17} /> Relatórios<ChevronDown size={16} className={`ml-auto transition-transform ${relatoriosAberto ? "rotate-180" : ""}`} /></button>
+            {relatoriosAberto && <div className="ml-5 mt-1 space-y-1 border-l border-white/15 pl-3"><button type="button" onClick={() => setTab("dashboard")} className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${tab === "dashboard" ? "bg-white/10 font-semibold text-orange-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}>Dashboard</button></div>}
+          </div>}
         </nav>
         <div className="px-5 py-4 text-[11px] text-slate-400 border-t border-white/10">
           <div className="mb-1 font-medium text-slate-200">{authUser?.nome || "Usuário"}</div>
@@ -832,7 +820,7 @@ export default function App() {
             <h1 className="headline text-4xl font-bold text-slate-900 md:text-5xl">Bem-Vindo</h1>
             <p className="text-sm text-slate-500 md:text-base">Selecione uma opção no menu para começar.</p>
           </section>}
-          {tab === "dashboard" && podeAcessar("dashboard") && <Dashboard db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} stats={stats} update={update} authUser={authUser} />}
+          {tab === "dashboard" && podeAcessar("dashboard") && <Dashboard db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} recebiveis={contasReceberFormatadas(getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "").ordens)} hoje={todayISO()} />}
           {tab === "orcamentos" && podeAcessar("orcamentos") && <OrcamentosWorkspace db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresa={empresaAtiva} onAbrirPedido={(pedido) => { setOrdemEmEdicao(pedido); setTab("ordens"); }} />}
           {tab === "ordens" && <OrdensWorkspace db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresa={empresaAtiva} ordemEmEdicao={ordemEmEdicao} setOrdemEmEdicao={setOrdemEmEdicao} podeEditarValor={isMaster || isGerente} />}
           {tab === "clientes" && <Clientes db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresaId={auth.empresaId || auth.usuarioLogado?.empresaId || ""} empresaSegmento={empresaAtiva?.segmento || "lava-jato"} />}
@@ -1512,70 +1500,6 @@ function ClientesRetornoModal({ clientes, update, authUser, onClose }) {
 }
 
 // ---------- Dashboard ----------
-function Dashboard({ db, stats, update, authUser }) {
-  const [retornosAbertos, setRetornosAbertos] = useState(false);
-  const retornos = useMemo(() => clientesParaRetorno(db), [db]);
-  const ultimasOrdens = db.ordens.filter((ordem) => !ordem.lancamentoManual).sort((a, b) => (a.data < b.data ? 1 : -1)).slice(0, 6);
-  return (
-    <div className="space-y-6">
-      <header>
-        <h1 className="headline text-2xl font-bold text-slate-900">Painel geral</h1>
-        <p className="text-slate-500 text-sm mt-1">Visão rápida do seu sistema hoje, {fmtDate(todayISO())}.</p>
-      </header>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={TrendingUp} label="Faturado no mês" value={brl(stats.receitaMes)} tone="cyan" />
-        <StatCard icon={TrendingDown} label="Faturamento diário" value={brl(stats.receitaDia)} tone="amber" />
-        <StatCard icon={Wallet} label="A receber" value={brl(stats.aReceber)} tone="amber" />
-        <StatCard icon={Landmark} label="A pagar" value={brl(stats.aPagar)} tone="red" />
-      </div>
-
-      <Card className="p-5">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-4">
-            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-emerald-700 to-orange-700 text-white shadow-lg shadow-slate-200"><MessageCircle size={19} /></div>
-            <div>
-              <h2 className="font-semibold text-slate-800">Clientes na hora de voltar</h2>
-              <p className="mt-0.5 text-sm text-slate-500">{retornos.length} {retornos.length === 1 ? "cliente pode estar pronto" : "clientes podem estar prontos"} para retornar</p>
-            </div>
-          </div>
-          <button type="button" onClick={() => setRetornosAbertos(true)} className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-900"><ExternalLink size={16} /> Ver clientes</button>
-        </div>
-      </Card>
-
-      <div>
-        <Card className="p-5">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-slate-800">Últimas ordens de serviço</h2>
-          </div>
-          {ultimasOrdens.length === 0 ? (
-            <EmptyState text="Nenhuma ordem de serviço registrada ainda." />
-          ) : (
-            <div className="divide-y divide-slate-100">
-              {ultimasOrdens.map((o) => (
-                <div key={o.id} className="py-2.5 flex items-center justify-between text-sm">
-                  <div>
-                    <div className="font-medium text-slate-800">#{o.numero} · {o.clienteNome}</div>
-                    <div className="text-slate-400 text-xs">{fmtDate(o.data)}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-semibold">{brl(o.total)}</div>
-                    {["rascunho", "pendente", "estornado"].includes(o.statusOS)
-                      ? <Badge tone="amber">Pendente</Badge>
-                      : <Badge tone="green">Concluído</Badge>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-
-      </div>
-      {retornosAbertos && <ClientesRetornoModal clientes={retornos} update={update} authUser={authUser} onClose={() => setRetornosAbertos(false)} />}
-    </div>
-  );
-}
-
 function StatCard({ icon: Icon, label, value, tone }) {
   const tones = {
     cyan: "from-orange-700 to-emerald-800",
