@@ -427,6 +427,34 @@ export default function App() {
 
   useEffect(() => {
     if (!loaded || !auth.usuarioLogado || tab === "login") return;
+
+    let cancelled = false;
+    const refreshFromRemote = async () => {
+      try {
+        const { database } = await loadDatabase(SEED);
+        if (cancelled) return;
+        const nextSnapshot = JSON.parse(JSON.stringify(database));
+        const hasChanged = JSON.stringify(dbRef.current) !== JSON.stringify(nextSnapshot);
+        if (hasChanged) {
+          dbRef.current = nextSnapshot;
+          setDb(nextSnapshot);
+          lastSynced.current = nextSnapshot;
+        }
+      } catch (error) {
+        console.error("Erro ao sincronizar dados em segundo plano:", error);
+      }
+    };
+
+    refreshFromRemote();
+    const timer = window.setInterval(refreshFromRemote, 7000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [loaded, auth.usuarioLogado, auth.empresaId, tab]);
+
+  useEffect(() => {
+    if (!loaded || !auth.usuarioLogado || tab === "login") return;
     const savedUi = loadSavedUi();
     localStorage.setItem(UI_STORAGE_KEY, JSON.stringify({
       ...savedUi,
@@ -816,37 +844,200 @@ export default function App() {
 
 function LoginScreen({ auth, setAuth, entrar, db }) {
   const [erro, setErro] = useState("");
+  const [modo, setModo] = useState("login");
+  const [sucesso, setSucesso] = useState("");
+  const [cadastro, setCadastro] = useState({
+    nome: "",
+    email: "",
+    empresa: "",
+    telefone: "",
+    segmento: "lava-jato",
+    mensagem: "",
+  });
   const isDefaultAdmin = auth.usuario.trim().toLowerCase() === DEFAULT_ADMIN_USERNAME;
+  const beneficios = [
+    "Controle financeiro em tempo real",
+    "Gestão de pedidos, clientes e estoque",
+    "Relatórios para decisões mais rápidas",
+    "Fluxo organizado para equipes e empresas",
+  ];
+
+  const solicitarAcesso = () => {
+    if (!cadastro.nome || !cadastro.email || !cadastro.empresa) {
+      setErro("Preencha nome, e-mail e empresa para solicitar o acesso.");
+      setSucesso("");
+      return;
+    }
+
+    const subject = encodeURIComponent("Solicitação de acesso ao MM ERP");
+    const body = encodeURIComponent(
+      `Nome: ${cadastro.nome}\n` +
+      `E-mail: ${cadastro.email}\n` +
+      `Empresa: ${cadastro.empresa}\n` +
+      `Segmento: ${cadastro.segmento}\n` +
+      `Telefone: ${cadastro.telefone || "Não informado"}\n\n` +
+      `Mensagem: ${cadastro.mensagem || "Quero conhecer os benefícios do sistema para a minha empresa."}`
+    );
+
+    setErro("");
+    setSucesso("Solicitação enviada. Seu e-mail foi preparado para liberar o acesso após aprovação.");
+    window.location.href = `mailto:contato@mmtec.com.br?subject=${subject}&body=${body}`;
+  };
+
+  const entrarComCredenciais = () => {
+    const user = (db.usuarios || []).find((u) =>
+      u.usuario === auth.usuario &&
+      u.senha === auth.senha &&
+      (!isDefaultAdmin || u.empresaId === auth.empresaId)
+    );
+
+    if (!user) {
+      setErro(isDefaultAdmin && !auth.empresaId ? "Selecione a empresa." : "Usuário ou senha inválidos.");
+      setSucesso("");
+      return;
+    }
+
+    setErro("");
+    setSucesso("");
+    entrar();
+  };
+
   return (
-    <div className="login-shell min-h-screen flex items-center justify-center p-6">
-      <Card className="w-full max-w-md p-6 space-y-4">
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-          <img src="/mm-erp-logo.png" alt="MM ERP" className="mx-auto h-auto max-h-64 w-auto object-contain" />
+    <div className="min-h-screen bg-[#f7f5f1] text-slate-800">
+      <header className="border-b border-slate-200 bg-white/90 backdrop-blur-sm">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+          <div className="flex items-center gap-3">
+            <img src="/mm-erp-logo.png" alt="MM ERP" className="h-12 w-auto" />
+            <div className="text-gray-500">|</div>
+            <div className="headline text-xl font-bold text-slate-800">MM ERP</div>
+          </div>
+          <nav className="hidden items-center gap-8 text-sm font-medium text-slate-600 md:flex">
+            <span>Vantagens</span>
+            <span>Funcionalidades</span>
+            <span>Segmentos</span>
+            <span>Contato</span>
+          </nav>
+          <button className="rounded-xl bg-[#d92f2f] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#b91d1d]">Acessar conta</button>
         </div>
-        <div>
-          <div className="mb-1 text-xs font-bold uppercase tracking-[0.18em] text-orange-700">MM Tecnologia</div>
-          <h1 className="headline text-2xl font-bold text-slate-900">Acessar o MM ERP</h1>
-          <p className="text-sm text-slate-500 mt-1">Gestão empresarial simples, segura e inteligente.</p>
-        </div>
-        <div className="rounded-xl bg-orange-50 border border-orange-200 p-3 text-sm text-orange-700">
-          Use as credenciais fornecidas pela sua empresa para acessar o sistema.
-        </div>
-        <Field label="Usuário">
-          <input className={inputCls} value={auth.usuario} onChange={(e) => setAuth((prev) => ({ ...prev, usuario: e.target.value }))} />
-        </Field>
-        <Field label="Senha">
-          <input type="password" className={inputCls} value={auth.senha} onChange={(e) => setAuth((prev) => ({ ...prev, senha: e.target.value }))} />
-        </Field>
-        {isDefaultAdmin && <Field label="Empresa">
-          <select className={inputCls} value={auth.empresaId} onChange={(e) => setAuth((prev) => ({ ...prev, empresaId: e.target.value }))}>
-            <option value="">Selecione a empresa</option>
-            {(db.empresas || []).map((empresa) => <option key={empresa.id} value={empresa.id}>{empresa.nome}</option>)}
-          </select>
-        </Field>}
-        {erro && <div className="text-sm text-red-600">{erro}</div>}
-        <button onClick={() => { const user = (db.usuarios || []).find((u) => u.usuario === auth.usuario && u.senha === auth.senha && (!isDefaultAdmin || u.empresaId === auth.empresaId)); if (!user) { setErro(isDefaultAdmin && !auth.empresaId ? "Selecione a empresa." : "Usuário ou senha inválidos."); return; } setErro(""); entrar(); }} className="w-full rounded-xl font-semibold py-2.5" style={{ backgroundColor: "#9a3412", color: "#ffffff", border: "1px solid #7c2d12" }}>Entrar no MM ERP</button>
-        <p className="text-center text-[11px] text-slate-400">Desenvolvido e mantido por <strong className="font-semibold text-slate-500">MM Tecnologia</strong></p>
-      </Card>
+      </header>
+
+      <main className="mx-auto max-w-7xl px-6 py-8 md:py-12">
+        <section className="overflow-hidden rounded-[30px] bg-[linear-gradient(135deg,#d64a37_0%,#b51f1f_48%,#7f1414_100%)] shadow-[0_30px_80px_-40px_rgba(113,23,23,0.9)]">
+          <div className="grid items-center gap-8 px-6 py-8 md:grid-cols-[1.2fr_0.8fr] md:px-12 md:py-12">
+            <div className="space-y-6 text-white">
+              <div className="inline-flex items-center rounded-full border border-white/30 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-red-50">
+                Gestão inteligente
+              </div>
+              <h1 className="headline max-w-xl text-4xl font-bold leading-tight md:text-5xl">
+                Sua empresa mais organizada, eficiente e pronta para crescer.
+              </h1>
+              <p className="max-w-xl text-base text-red-50/90 md:text-lg">
+                O MM ERP centraliza clientes, vendas, finanças, estoque e operação em um único sistema pensado para acelerar a rotina do seu negócio.
+              </p>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                {beneficios.map((item) => (
+                  <div key={item} className="flex items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-3 py-2 text-sm font-medium text-red-50 backdrop-blur-sm">
+                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/15 text-xs font-bold">✓</span>
+                    {item}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-[26px] bg-white p-5 shadow-2xl ring-1 ring-slate-200/90 md:p-6">
+              <div className="mb-5 flex rounded-full bg-slate-100 p-1">
+                <button
+                  type="button"
+                  onClick={() => setModo("login")}
+                  className={`flex-1 rounded-full px-3 py-2 text-sm font-semibold transition ${modo === "login" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
+                >
+                  Entrar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModo("cadastro")}
+                  className={`flex-1 rounded-full px-3 py-2 text-sm font-semibold transition ${modo === "cadastro" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
+                >
+                  Cadastrar
+                </button>
+              </div>
+
+              {modo === "login" ? (
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-red-700">MM Tecnologia</p>
+                    <h2 className="headline mt-1 text-2xl font-bold text-slate-900">Acessar o sistema</h2>
+                  </div>
+
+                  <Field label="Usuário">
+                    <input className={inputCls} value={auth.usuario} onChange={(e) => setAuth((prev) => ({ ...prev, usuario: e.target.value }))} />
+                  </Field>
+                  <Field label="Senha">
+                    <input type="password" className={inputCls} value={auth.senha} onChange={(e) => setAuth((prev) => ({ ...prev, senha: e.target.value }))} />
+                  </Field>
+                  {isDefaultAdmin && (
+                    <Field label="Empresa">
+                      <select className={inputCls} value={auth.empresaId} onChange={(e) => setAuth((prev) => ({ ...prev, empresaId: e.target.value }))}>
+                        <option value="">Selecione a empresa</option>
+                        {(db.empresas || []).map((empresa) => <option key={empresa.id} value={empresa.id}>{empresa.nome}</option>)}
+                      </select>
+                    </Field>
+                  )}
+
+                  {erro && <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{erro}</div>}
+                  {sucesso && <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{sucesso}</div>}
+
+                  <button onClick={entrarComCredenciais} className="w-full rounded-xl bg-[#d93a3a] py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#b91d1d]">
+                    Entrar no MM ERP
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-red-700">Solicite seu acesso</p>
+                    <h2 className="headline mt-1 text-2xl font-bold text-slate-900">Cadastrar empresa</h2>
+                  </div>
+
+                  <Field label="Seu nome">
+                    <input className={inputCls} value={cadastro.nome} onChange={(e) => setCadastro((prev) => ({ ...prev, nome: e.target.value }))} />
+                  </Field>
+                  <Field label="E-mail">
+                    <input type="email" className={inputCls} value={cadastro.email} onChange={(e) => setCadastro((prev) => ({ ...prev, email: e.target.value }))} />
+                  </Field>
+                  <Field label="Empresa">
+                    <input className={inputCls} value={cadastro.empresa} onChange={(e) => setCadastro((prev) => ({ ...prev, empresa: e.target.value }))} />
+                  </Field>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="Telefone">
+                      <input className={inputCls} value={cadastro.telefone} onChange={(e) => setCadastro((prev) => ({ ...prev, telefone: e.target.value }))} />
+                    </Field>
+                    <Field label="Segmento">
+                      <select className={inputCls} value={cadastro.segmento} onChange={(e) => setCadastro((prev) => ({ ...prev, segmento: e.target.value }))}>
+                        <option value="lava-jato">Lava Jato</option>
+                        <option value="barbearia">Barbearia</option>
+                        <option value="cabeleleiro">Cabeleireiro</option>
+                        <option value="estetica">Estética</option>
+                        <option value="outro">Outro</option>
+                      </select>
+                    </Field>
+                  </div>
+                  <Field label="Qual a vantagem que você quer no sistema?">
+                    <textarea rows="3" className={inputCls} value={cadastro.mensagem} onChange={(e) => setCadastro((prev) => ({ ...prev, mensagem: e.target.value }))} placeholder="Ex.: Quero controlar pedidos, estoque e financeiro em um só lugar." />
+                  </Field>
+
+                  {erro && <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{erro}</div>}
+                  {sucesso && <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{sucesso}</div>}
+
+                  <button onClick={solicitarAcesso} className="w-full rounded-xl bg-[#b91d1d] py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#8f1414]">
+                    Solicitar acesso
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      </main>
     </div>
   );
 }
