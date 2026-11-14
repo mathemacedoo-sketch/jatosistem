@@ -2,9 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createCliente, loadDatabase, syncDatabase } from "./lib/database";
 import PedidoVenda from "./componentes/PedidoVenda";
 import Dashboard from "./componentes/Dashboard";
+import PainelPatio from "./componentes/PainelPatio";
 import ImpressaoVenda from "./componentes/ImpressaoVenda";
 import { calcularItem, filtrarItensValidos, normalizarBuscaTexto, sincronizarParcelas, somarItens } from "./lib/pedido";
-import { ClienteDocumento, ItensDocumento, ObservacoesDocumento } from "./componentes/DocumentoVenda";
+import { ClienteDocumento, ItensDocumento, ObservacoesDocumento, ResumoDocumento, veiculosDoCliente as veiculosDoDocumentoCliente } from "./componentes/DocumentoVenda";
 
 import {
   ChartColumn,
@@ -665,7 +666,7 @@ export default function App() {
             </linearGradient>
           </defs>
         </svg>
-        <nav className="flex-1 px-3 py-4 space-y-1">
+        <nav className="app-primary-nav flex-1 px-3 py-4 space-y-1">
           {NAV.map((n) => {
             const Icon = n.icon;
             const active = tab === n.id;
@@ -686,7 +687,7 @@ export default function App() {
           })}
 
           {canShowCadastros && (
-            <div>
+            <div className="app-nav-group" onMouseLeave={() => setCadastrosAberto(false)}>
               <button
                 type="button"
                 onClick={() => setCadastrosAberto((aberto) => !aberto)}
@@ -702,29 +703,29 @@ export default function App() {
                 <ChevronDown size={16} className={`ml-auto transition-transform ${cadastrosAberto ? "rotate-180" : ""}`} />
               </button>
               {cadastrosAberto && (
-                <div className="ml-5 mt-1 space-y-1 border-l border-white/15 pl-3">
+                <div className="app-nav-submenu ml-5 mt-1 space-y-1 border-l border-white/15 pl-3">
                   {isMaster && (
-                    <button type="button" onClick={() => setTab("empresas")} className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${tab === "empresas" ? "bg-white/10 font-semibold text-orange-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}>
+                    <button type="button" onClick={() => { setTab("empresas"); setCadastrosAberto(false); }} className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${tab === "empresas" ? "bg-white/10 font-semibold text-orange-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}>
                       Empresas
                     </button>
                   )}
                   {podeGerenciarUsuarios && (
-                    <button type="button" onClick={() => setTab("usuarios")} className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${tab === "usuarios" ? "bg-white/10 font-semibold text-orange-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}>
+                    <button type="button" onClick={() => { setTab("usuarios"); setCadastrosAberto(false); }} className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${tab === "usuarios" ? "bg-white/10 font-semibold text-orange-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}>
                       Usuários
                     </button>
                   )}
                   {podeAcessar("clientes") && (
-                    <button type="button" onClick={() => setTab("clientes")} className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${tab === "clientes" ? "bg-white/10 font-semibold text-orange-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}>
+                    <button type="button" onClick={() => { setTab("clientes"); setCadastrosAberto(false); }} className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${tab === "clientes" ? "bg-white/10 font-semibold text-orange-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}>
                       Clientes
                     </button>
                   )}
                   {podeAcessar("funcionarios") && (
-                    <button type="button" onClick={() => setTab("funcionarios")} className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${tab === "funcionarios" ? "bg-white/10 font-semibold text-orange-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}>
+                    <button type="button" onClick={() => { setTab("funcionarios"); setCadastrosAberto(false); }} className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${tab === "funcionarios" ? "bg-white/10 font-semibold text-orange-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}>
                       Funcionários
                     </button>
                   )}
                   {podeAcessar("catalogo") && (
-                    <button type="button" onClick={() => setTab("catalogo")} className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${tab === "catalogo" ? "bg-white/10 font-semibold text-orange-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}>
+                    <button type="button" onClick={() => { setTab("catalogo"); setCadastrosAberto(false); }} className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${tab === "catalogo" ? "bg-white/10 font-semibold text-orange-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}>
                       Produtos e Serviços
                     </button>
                   )}
@@ -733,7 +734,7 @@ export default function App() {
             </div>
           )}
 
-          <div>
+          <div className="app-nav-group" onMouseLeave={() => setServicoAberto(false)}>
             <button
               type="button"
               onClick={() => setServicoAberto((aberto) => !aberto)}
@@ -749,17 +750,17 @@ export default function App() {
               <ChevronDown size={16} className={`ml-auto transition-transform ${servicoAberto ? "rotate-180" : ""}`} />
             </button>
             {servicoAberto && (
-              <div className="ml-5 mt-1 space-y-1 border-l border-white/15 pl-3">
+            <div className="app-nav-submenu ml-5 mt-1 space-y-1 border-l border-white/15 pl-3">
                 <button
                   type="button"
-                  onClick={() => setTab("orcamentos")}
+                onClick={() => { setTab("orcamentos"); setServicoAberto(false); }}
                   className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${tab === "orcamentos" ? "bg-white/10 font-semibold text-orange-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}
                 >
                   Orçamento
                 </button>
                 <button
                   type="button"
-                  onClick={() => setTab("ordens")}
+                  onClick={() => { setTab("ordens"); setServicoAberto(false); }}
                   className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${tab === "ordens" ? "bg-white/10 font-semibold text-orange-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}
                 >
                   Pedido
@@ -769,7 +770,7 @@ export default function App() {
           </div>
 
           {canShowFinanceiro && (
-            <div>
+            <div className="app-nav-group" onMouseLeave={() => setFinanceiroAberto(false)}>
               <button
                 type="button"
                 onClick={() => setFinanceiroAberto((aberto) => !aberto)}
@@ -785,14 +786,14 @@ export default function App() {
                 <ChevronDown size={16} className={`ml-auto transition-transform ${financeiroAberto ? "rotate-180" : ""}`} />
               </button>
               {financeiroAberto && (
-                <div className="ml-5 mt-1 space-y-1 border-l border-white/15 pl-3">
+                <div className="app-nav-submenu ml-5 mt-1 space-y-1 border-l border-white/15 pl-3">
                   {podeAcessar("receber") && (
-                    <button type="button" onClick={() => setTab("receber")} className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${tab === "receber" ? "bg-white/10 font-semibold text-orange-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}>
+                    <button type="button" onClick={() => { setTab("receber"); setFinanceiroAberto(false); }} className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${tab === "receber" ? "bg-white/10 font-semibold text-orange-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}>
                       Contas a Receber
                     </button>
                   )}
                   {podeAcessar("pagar") && (
-                    <button type="button" onClick={() => setTab("pagar")} className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${tab === "pagar" ? "bg-white/10 font-semibold text-orange-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}>
+                    <button type="button" onClick={() => { setTab("pagar"); setFinanceiroAberto(false); }} className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${tab === "pagar" ? "bg-white/10 font-semibold text-orange-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}>
                       Contas a Pagar
                     </button>
                   )}
@@ -800,9 +801,9 @@ export default function App() {
               )}
             </div>
           )}
-          {podeAcessar("dashboard") && <div>
+          {podeAcessar("dashboard") && <div className="app-nav-group" onMouseLeave={() => setRelatoriosAberto(false)}>
             <button type="button" onClick={() => setRelatoriosAberto((aberto) => !aberto)} aria-expanded={relatoriosAberto} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition border ${tab === "dashboard" ? "bg-orange-500/20 text-orange-200 border-orange-400/30" : "text-slate-300 hover:bg-white/5 hover:text-white border-transparent"}`}><ChartColumn size={17} /> Relatórios<ChevronDown size={16} className={`ml-auto transition-transform ${relatoriosAberto ? "rotate-180" : ""}`} /></button>
-            {relatoriosAberto && <div className="ml-5 mt-1 space-y-1 border-l border-white/15 pl-3"><button type="button" onClick={() => setTab("dashboard")} className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${tab === "dashboard" ? "bg-white/10 font-semibold text-orange-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}>Dashboard</button></div>}
+            {relatoriosAberto && <div className="app-nav-submenu ml-5 mt-1 space-y-1 border-l border-white/15 pl-3"><button type="button" onClick={() => { setTab("dashboard"); setRelatoriosAberto(false); }} className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${tab === "dashboard" ? "bg-white/10 font-semibold text-orange-200" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}>Dashboard</button></div>}
           </div>}
         </nav>
         <div className="px-5 py-4 text-[11px] text-slate-400 border-t border-white/10">
@@ -813,16 +814,18 @@ export default function App() {
       </aside>
 
       {/* Main */}
-      <main ref={mainRef} onScroll={saveScrollPosition} className="app-main flex-1 min-w-0 overflow-y-auto">
-        <div className="max-w-7xl mx-auto p-6 md:p-8">
-          {tab === "inicio" && <section className="flex min-h-[calc(100dvh-4rem)] flex-col items-center justify-center gap-8 text-center" aria-label="Tela inicial">
-            <img src="/mm-erp-logo.png" alt="MM ERP" className="w-full max-w-sm rounded-2xl object-contain" />
-            <h1 className="headline text-4xl font-bold text-slate-900 md:text-5xl">Bem-Vindo</h1>
-            <p className="text-sm text-slate-500 md:text-base">Selecione uma opção no menu para começar.</p>
-          </section>}
+      <main ref={mainRef} onScroll={saveScrollPosition} className={`app-main flex-1 min-w-0 overflow-y-auto ${tab === "ordens" ? "app-main-os" : ""}`}>
+        <div className="w-full p-4 md:p-6">
+          {tab === "inicio" && <PainelPatio
+            db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")}
+            hoje={todayISO()}
+            update={update}
+            onNovaOS={() => { setOrdemEmEdicao(null); setTab("ordens"); }}
+            onAbrirOS={(ordem) => { setOrdemEmEdicao(ordem); setTab("ordens"); }}
+          />}
           {tab === "dashboard" && podeAcessar("dashboard") && <Dashboard db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} recebiveis={contasReceberFormatadas(getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "").ordens)} hoje={todayISO()} />}
           {tab === "orcamentos" && podeAcessar("orcamentos") && <OrcamentosWorkspace db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresa={empresaAtiva} onAbrirPedido={(pedido) => { setOrdemEmEdicao(pedido); setTab("ordens"); }} />}
-          {tab === "ordens" && <OrdensWorkspace db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresa={empresaAtiva} ordemEmEdicao={ordemEmEdicao} setOrdemEmEdicao={setOrdemEmEdicao} podeEditarValor={isMaster || isGerente} />}
+          {tab === "ordens" && <OrdensWorkspace db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresa={empresaAtiva} ordemEmEdicao={ordemEmEdicao} setOrdemEmEdicao={setOrdemEmEdicao} podeEditarValor={isMaster || isGerente} onPedidoSalvo={() => setTab("inicio")} />}
           {tab === "clientes" && <Clientes db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresaId={auth.empresaId || auth.usuarioLogado?.empresaId || ""} empresaSegmento={empresaAtiva?.segmento || "lava-jato"} />}
           {tab === "funcionarios" && podeAcessar("funcionarios") && <FuncionariosScreen db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} empresaId={auth.empresaId || auth.usuarioLogado?.empresaId || ""} />}
           {tab === "catalogo" && podeAcessar("catalogo") && <ProdutosServicos db={getEmpresaData(db, auth.empresaId || auth.usuarioLogado?.empresaId || "")} update={update} />}
@@ -1621,6 +1624,10 @@ function BaixaFinanceiraModal({ titulo, referencia, baixa, setBaixa, onConfirmar
 // ---------- Orçamentos ----------
 function OrcamentosWorkspace({ db, update, empresa, onAbrirPedido }) {
   const [clienteId, setClienteId] = useState("");
+  const [veiculoId, setVeiculoId] = useState("");
+  const [porteVeiculo, setPorteVeiculo] = useState("");
+  const [lavadorId, setLavadorId] = useState("");
+  const [notificarWhatsapp, setNotificarWhatsapp] = useState(false);
   const [itens, setItens] = useState([]);
   const [observacao, setObservacao] = useState("");
   const operacaoEmCurso = useRef(false);
@@ -1633,6 +1640,7 @@ function OrcamentosWorkspace({ db, update, empresa, onAbrirPedido }) {
   const [mensagem, setMensagem] = useState("");
 
   const clienteSelecionado = (db.clientes || []).find((cliente) => String(cliente.id) === String(clienteId));
+  const veiculoSelecionado = veiculosDoDocumentoCliente(clienteSelecionado).find((item) => String(item.id) === String(veiculoId));
   const numeroSeguinte = `ORC-${String(Math.max(0, ...(db.orcamentos || []).map((item) => Number(String(item.numero || "").replace(/\D/g, "")) || 0)) + 1).padStart(4, "0")}`;
   const orcamentos = [...(db.orcamentos || [])].sort((a, b) => String(b.data || "").localeCompare(String(a.data || "")));
   const registroAtual = (db.orcamentos || []).find((item) => String(item.id) === String(orcamentoAtual?.id)) || orcamentoAtual;
@@ -1646,6 +1654,10 @@ function OrcamentosWorkspace({ db, update, empresa, onAbrirPedido }) {
 
   const resetarFormulario = () => {
     setClienteId("");
+    setVeiculoId("");
+    setPorteVeiculo("");
+    setLavadorId("");
+    setNotificarWhatsapp(false);
     setItens([]);
     setOrcamentoAtual(null);
     setObservacao("");
@@ -1657,6 +1669,10 @@ function OrcamentosWorkspace({ db, update, empresa, onAbrirPedido }) {
     setPesquisaOrcamentoAberta(false);
     setBuscaOrcamento("");
     setClienteId(orcamento.clienteId || "");
+    setVeiculoId(orcamento.veiculoId || "");
+    setPorteVeiculo(orcamento.porteVeiculo || "");
+    setLavadorId(orcamento.lavadorId || "");
+    setNotificarWhatsapp(Boolean(orcamento.notificarWhatsapp));
     setItens((orcamento.itens || []).map((item) => ({
       ...item,
       uidLine: item.uidLine || uid(),
@@ -1691,6 +1707,12 @@ function OrcamentosWorkspace({ db, update, empresa, onAbrirPedido }) {
       clienteId: clienteSelecionado.id,
       clienteNome: clienteSelecionado.nome || "Cliente",
       clienteSnapshot,
+      veiculoId: veiculoSelecionado?.id || null,
+      veiculoSnapshot: veiculoSelecionado || null,
+      porteVeiculo,
+      lavadorId: lavadorId || null,
+      lavadorNome: lavadorId ? db.funcionarios?.find((item) => String(item.id) === String(lavadorId))?.nome || registroAtual?.lavadorNome || "" : "",
+      notificarWhatsapp,
       itens: itensValidos,
       subtotal: resumo.subtotal,
       total: resumo.total,
@@ -1766,6 +1788,15 @@ function OrcamentosWorkspace({ db, update, empresa, onAbrirPedido }) {
       data: todayISO(),
       clienteId: orcamento.clienteId,
       clienteNome: orcamento.clienteNome,
+      clienteSnapshot: orcamento.clienteSnapshot || {},
+      veiculoId: orcamento.veiculoId || null,
+      veiculoSnapshot: orcamento.veiculoSnapshot || null,
+      porteVeiculo: orcamento.porteVeiculo || "",
+      lavadorId: orcamento.lavadorId || null,
+      lavadorNome: orcamento.lavadorNome || "",
+      notificarWhatsapp: Boolean(orcamento.notificarWhatsapp),
+      statusPatio: "aguardando",
+      patioEntradaEm: new Date().toISOString(),
       itens: (orcamento.itens || []).map((item) => ({ ...item, uidLine: item.uidLine || uid() })),
       subtotal: Number(orcamento.subtotal || orcamento.total || 0),
       desconto: 0,
@@ -1814,8 +1845,8 @@ function OrcamentosWorkspace({ db, update, empresa, onAbrirPedido }) {
       </div>}
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="headline text-2xl font-bold text-slate-900">Orçamentos</h1>
-          <p className="mt-1 text-sm text-slate-500">Selecione o cliente, inclua os itens e converta em pedido quando aprovado.</p>
+          <h1 className="headline text-2xl font-bold text-slate-900">{orcamentoAtual ? `Orçamento ${orcamentoAtual.numero || ""}` : "Novo orçamento"}</h1>
+          <p className="mt-1 text-sm text-slate-500">Escolha o cliente e os serviços; confira o resumo antes de salvar ou converter em OS.</p>
         </div>
         <div className="flex flex-wrap gap-2">
         <button type="button" onClick={() => { setBuscaOrcamento(""); setPesquisaOrcamentoAberta(true); }} disabled={salvando} className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-40"><Search size={15} /> Pesquisar orçamento</button>
@@ -1828,16 +1859,34 @@ function OrcamentosWorkspace({ db, update, empresa, onAbrirPedido }) {
       <div className="space-y-5">
         {mensagem && <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{mensagem}</div>}
         {convertido && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">Este orçamento já foi convertido em pedido. Use o botão abaixo para abrir o pedido.</div>}
-        <fieldset disabled={salvando || convertido} className="min-w-0 space-y-5">
-          <ClienteDocumento db={db} clienteId={clienteId} setClienteId={setClienteId} />
-          <ItensDocumento db={db} itens={itens} setItens={setItens} titulo="Itens do orçamento" comDesconto={false} />
-          <ObservacoesDocumento tipo="orçamento" observacao={observacao} setObservacao={setObservacao} />
-        </fieldset>
-        <div className="flex flex-wrap justify-end gap-3">
-          <button type="button" onClick={salvarOrcamento} disabled={salvando || convertido || !clienteId || !filtrarItensValidos(itens).length} className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-800 disabled:cursor-not-allowed disabled:opacity-40"><CheckCircle2 size={16} /> {salvando ? "Salvando..." : "Salvar orçamento"}</button>
-          <button type="button" onClick={() => converterEmPedido()} disabled={!clienteId || !filtrarItensValidos(itens).length} className="inline-flex items-center justify-center gap-2 rounded-xl bg-orange-700 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"><ExternalLink size={16} /> {convertido ? "Abrir pedido" : "Converter para pedido"}</button>
-          <button type="button" onClick={() => imprimirOrcamento()} disabled={!clienteId || !filtrarItensValidos(itens).length} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"><Printer size={16} /> Imprimir</button>
-          {orcamentoAtual && !convertido && <button type="button" onClick={() => excluirOrcamento(orcamentoAtual)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-50"><Trash2 size={16} /> Excluir orçamento</button>}
+        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.55fr)_minmax(18rem,0.8fr)]">
+          <fieldset disabled={salvando || convertido} className="min-w-0 space-y-5">
+            <ClienteDocumento
+              db={db}
+              clienteId={clienteId}
+              setClienteId={setClienteId}
+              veiculoId={veiculoId}
+              setVeiculoId={setVeiculoId}
+              porteVeiculo={porteVeiculo}
+              setPorteVeiculo={setPorteVeiculo}
+            />
+            <ItensDocumento db={db} itens={itens} setItens={setItens} titulo="Serviços e produtos do orçamento" comDesconto={false} />
+            <ObservacoesDocumento tipo="orçamento" observacao={observacao} setObservacao={setObservacao} />
+          </fieldset>
+          <ResumoDocumento
+            db={db}
+            itens={itens}
+            lavadorId={lavadorId}
+            setLavadorId={setLavadorId}
+            notificarWhatsapp={notificarWhatsapp}
+            setNotificarWhatsapp={setNotificarWhatsapp}
+            disabled={salvando || convertido}
+          >
+            <button type="button" onClick={salvarOrcamento} disabled={salvando || convertido || !clienteId || !filtrarItensValidos(itens).length} className="w-full rounded-xl border border-cyan-700 bg-white px-4 py-3 text-sm font-semibold text-cyan-800 disabled:cursor-not-allowed disabled:opacity-40">{salvando ? "Salvando..." : "Salvar orçamento"}</button>
+            <button type="button" onClick={() => converterEmPedido()} disabled={!clienteId || !filtrarItensValidos(itens).length} className="w-full rounded-xl bg-cyan-700 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"><ExternalLink size={16} className="mr-2 inline" />{convertido ? "Abrir OS" : "Converter em OS"}</button>
+            <button type="button" onClick={() => imprimirOrcamento()} disabled={!clienteId || !filtrarItensValidos(itens).length} className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"><Printer size={16} className="mr-2 inline" />Imprimir orçamento</button>
+            {orcamentoAtual && !convertido && <button type="button" onClick={() => excluirOrcamento(orcamentoAtual)} className="w-full rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-50"><Trash2 size={16} className="mr-2 inline" />Excluir orçamento</button>}
+          </ResumoDocumento>
         </div>
 
         <Card className="overflow-hidden p-0">
@@ -1891,7 +1940,7 @@ function OrcamentosWorkspace({ db, update, empresa, onAbrirPedido }) {
 }
 
 // ---------- Pedidos ----------
-function OrdensWorkspace({ db, update, empresa, ordemEmEdicao, setOrdemEmEdicao, podeEditarValor }) {
+function OrdensWorkspace({ db, update, empresa, ordemEmEdicao, setOrdemEmEdicao, podeEditarValor, onPedidoSalvo }) {
   const [formKey, setFormKey] = useState(0);
   const ordens = (db.ordens || []).filter((ordem) => !ordem.lancamentoManual);
   const pendentes = ordens.filter((ordem) => ["rascunho", "pendente", "estornado"].includes(ordem.statusOS)).length;
@@ -1902,20 +1951,20 @@ function OrdensWorkspace({ db, update, empresa, ordemEmEdicao, setOrdemEmEdicao,
   };
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="os-workspace flex h-full min-h-0 flex-col gap-3">
+      <header className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="headline text-2xl font-bold text-slate-900">Pedidos</h1>
+          <h1 className="headline text-2xl font-bold text-slate-900">{ordemEmEdicao ? `OS #${ordemEmEdicao.numero}` : "Nova OS"}</h1>
           <p className="mt-1 text-sm text-slate-500">
-            {ordemEmEdicao ? `Continuando o pedido #${ordemEmEdicao.numero}.` : pendentes ? `${pendentes} pedido(s) em andamento.` : "Preencha os dados para registrar um novo pedido."}
+            {ordemEmEdicao ? "Confira os dados, os serviços e o resumo antes de atualizar a OS." : pendentes ? `${pendentes} OS em andamento. Preencha os dados para adicionar outra à fila.` : "Preencha os dados do veículo e selecione os serviços para criar uma OS."}
           </p>
         </div>
         <button onClick={abrirNova} className="flex items-center gap-2 rounded-xl bg-gradient-to-br from-orange-700 to-emerald-800 px-4 py-2.5 text-sm font-semibold text-white shadow-sm">
-          <FilePlus2 size={16} /> Novo pedido
+          <FilePlus2 size={16} /> Nova OS
         </button>
       </header>
 
-      <div className="block">
+      <div className="min-h-0 flex flex-1 flex-col">
         <PedidoVenda
           ReciboModal={ReciboOSModal}
           key={formKey}
@@ -1923,7 +1972,7 @@ function OrdensWorkspace({ db, update, empresa, ordemEmEdicao, setOrdemEmEdicao,
           update={update}
           empresa={empresa}
           ordemEmEdicao={ordemEmEdicao}
-          onFinalizarEdicao={() => setOrdemEmEdicao(null)}
+          onFinalizarEdicao={(concluido) => { setOrdemEmEdicao(null); if (!concluido) onPedidoSalvo?.(); }}
           onConcluirFechado={() => setOrdemEmEdicao(null)}
           onSelecionarPedido={(pedido) => {
             setOrdemEmEdicao(pedido);
